@@ -1,0 +1,22 @@
+[project]
+name = "master_thesis_federated_learning"
+version = "0.0.1"
+description = "Simulationg a federated learning enviroment with different values of dirichlet distribution and privacy budget"
+dependencies = [
+    "torch>=2.2.0",
+    "torchvision>=0.17.0",
+]
+
+[tool.flwr.app]
+publisher = "Leonardo Salpini"
+
+[tool.flwr.app.components]
+serverapp = "master_thesis_federated_learning.server_app:app"
+clientapp = "master_thesis_federated_learning.client_app:app"
+
+[tool.flwr.app.config]
+num-server-rounds = 3
+fraction-evaluate = 0.5
+local-epochs = 1
+learning-rate = 0.1
+batch-size = 32

@@ -5,6 +5,7 @@ import torchvision.transforms as transforms
 from flwr_datasets.utils import divide_dataset
 from collections import Counter
 import pandas as pd
+from datasets import load_dataset
 
 fd = None
 
@@ -39,25 +40,30 @@ def load_data(partition_id: int, num_partitions: int, batch_size: int):
     
     return DataLoader(train, batch_size=batch_size), DataLoader(valid, batch_size=batch_size)
 
-
-def compare_all_distributions(num_partitions: int):
-
-    all_counts = {}
-    for i in range(num_partitions):
-        train_loader, val_loader = load_data(partition_id=i, num_partitions=num_partitions, batch_size=32)
-        train_labels = train_loader.dataset["label"]
-        val_labels = val_loader.dataset["label"]
-        all_counts[f"Client {i}"] = Counter(train_labels) + Counter(val_labels)
-
-    df = pd.DataFrame(all_counts).fillna(0).astype(int)
-    df.index.name = "Classe"
-    df = df.sort_index()
+def load_centralized_dataset(batch_size):
+    test_dataset = load_dataset("cifar10", split="test")
+    test_dataset = test_dataset.with_transform(get_transform_fn(test_validation_transform))
+    return DataLoader(test_dataset, batch_size=batch_size)
     
-    print(df.to_string())
-    return df
 
-if __name__ == "__main__":
-    N_CLIENTS = 10
-    dist_df = compare_all_distributions(num_partitions=N_CLIENTS)
+# def compare_all_distributions(num_partitions: int):
+
+#     all_counts = {}
+#     for i in range(num_partitions):
+#         train_loader, val_loader = load_data(partition_id=i, num_partitions=num_partitions, batch_size=32)
+#         train_labels = train_loader.dataset["label"]
+#         val_labels = val_loader.dataset["label"]
+#         all_counts[f"Client {i}"] = Counter(train_labels) + Counter(val_labels)
+
+#     df = pd.DataFrame(all_counts).fillna(0).astype(int)
+#     df.index.name = "Classe"
+#     df = df.sort_index()
     
-    print(f"\Sum of all samples: {dist_df.sum().sum()}")
+#     print(df.to_string())
+#     return df
+
+# if __name__ == "__main__":
+#     N_CLIENTS = 10
+#     dist_df = compare_all_distributions(num_partitions=N_CLIENTS)
+    
+#     print(f"\Sum of all samples: {dist_df.sum().sum()}")

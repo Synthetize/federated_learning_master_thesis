@@ -213,5 +213,6 @@ fabric.properties
 .claude
 .venv
 PLAN.md
+GEMINI.md
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,pycharm,jetbrains

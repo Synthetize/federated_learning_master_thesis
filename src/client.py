@@ -44,10 +44,9 @@ def train(msg: Message, context: Context):
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict(), strict=True)
 
     # Create optimizer
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
         model.parameters(),
         lr=msg.content["config"]["lr"],
-        momentum=0.9,
     )
 
     # Attach Opacus PrivacyEngine — wraps model, optimizer, and dataloader

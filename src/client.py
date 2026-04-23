@@ -4,6 +4,7 @@ import torch
 from flwr.client import ClientApp
 from flwr.common import Context, Message, ArrayRecord, MetricRecord, RecordDict
 from opacus import PrivacyEngine
+from opacus.accountants.utils import get_noise_multiplier
 
 from model import Net, train as model_train, test as model_test, train_dp as model_train_dp
 from data_loader import load_data
@@ -35,9 +36,22 @@ def train(msg: Message, context: Context):
     trainloader, _ = load_data(partition_id, num_partitions, batch_size)
 
     # Read DP parameters from run_config
-    noise_multiplier = float(context.run_config["noise-multiplier"])
     max_grad_norm = float(context.run_config["max-grad-norm"])
     target_delta = float(context.run_config["target-delta"])
+    target_epsilon = float(context.run_config["target-epsilon"])
+    sample_rate = batch_size / len(trainloader.dataset)
+    local_epochs = int(context.run_config["local-epochs"])
+    num_rounds = int(context.run_config["num-server-rounds"])
+    total_epochs = local_epochs * num_rounds
+
+
+
+    noise_multiplier = get_noise_multiplier(
+        target_epsilon=target_epsilon,
+        target_delta=target_delta,
+        sample_rate=sample_rate,
+        epochs=total_epochs,
+    )
 
     # Load the model and initialize it with the received weights
     model = Net().to(device)
@@ -48,6 +62,8 @@ def train(msg: Message, context: Context):
         model.parameters(),
         lr=msg.content["config"]["lr"],
     )
+
+
 
     # Attach Opacus PrivacyEngine — wraps model, optimizer, and dataloader
     privacy_engine = PrivacyEngine(secure_mode=False)
@@ -70,10 +86,12 @@ def train(msg: Message, context: Context):
         epochs=context.run_config["local-epochs"],
     )
 
-    print(
-        f"[client {partition_id}] epsilon(delta={target_delta})={epsilon:.2f}, "
-        f"noise={noise_multiplier}, max_grad_norm={max_grad_norm}, loss={train_loss:.4f}"
-    )
+    # print(
+    #     f"[client {partition_id}] epsilon(delta={target_delta})={epsilon:.2f}, "
+    #     f"noise={noise_multiplier}, max_grad_norm={max_grad_norm}, loss={train_loss:.4f}"
+    # )
+
+    print(f"[CLIENT {partition_id}] \n train loss={train_loss:.4f} \n epsilon(delta={target_delta})={epsilon:.2f} \n noise={noise_multiplier} \n max_grad_norm={max_grad_norm}")
 
     # Use _unwrap_state_dict to strip the Opacus wrapper before sending back
     out_arrays = ArrayRecord(_unwrap_state_dict(private_model))

@@ -24,7 +24,7 @@ def main(grid: Grid, context: Context) -> None:
 
     # Initialize FedAvg strategy
     strategy = FedProx(
-        fraction_evaluate=fraction_evaluate,   
+        fraction_evaluate=fraction_evaluate,
     )
 
     # Start strategy, run FedAvg for `num_rounds`

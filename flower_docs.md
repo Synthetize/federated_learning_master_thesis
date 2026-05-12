@@ -377,7 +377,7 @@ https://flower.ai/docs/framework/how-to-use-built-in-mods.html
 
 # Flowe Framework (Explanations)
 ## Federated Evaluation
-
+https://flower.ai/docs/framework/explanation-federated-evaluation.html
 ## Differential Privacy
 https://flower.ai/docs/framework/explanation-differential-privacy.html
 ## Secure Aggregation Protocols

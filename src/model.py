@@ -72,14 +72,19 @@ def test(net, testloader, device):
     """Validate the model on the test set."""
     net.to(device)
     criterion = torch.nn.CrossEntropyLoss()
-    correct, loss = 0, 0.0
+    # criterion = torch.nn.CrossEntropyLoss(reduction="sum")
+    correct, log_loss = 0, 0.0
+    # correct, log_loss, total_examples = 0, 0.0, 0
     with torch.no_grad():
         for batch in testloader:
             images = batch["img"].to(device)
             labels = batch["label"].to(device)
             outputs = net(images)
-            loss += criterion(outputs, labels).item()
+            log_loss += criterion(outputs, labels).item()
+            # log_loss += criterion(outputs, labels).item()  # with reduction="sum"
+            # total_examples += labels.size(0)
             correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
     accuracy = correct / len(testloader.dataset)
-    loss = loss / len(testloader)
-    return loss, accuracy
+    log_loss = log_loss / len(testloader)
+    # log_loss = log_loss / total_examples  # weighted by number of samples
+    return log_loss, accuracy

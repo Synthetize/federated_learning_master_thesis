@@ -161,13 +161,13 @@ def evaluate(msg: Message, context: Context):
     _, valloader = load_data(partition_id, num_partitions, batch_size)
 
     # Call the evaluation function
-    eval_loss, eval_acc = model_test(model, valloader, device)
+    eval_log_loss, eval_acc = model_test(model, valloader, device)
 
-    print(f"[client {partition_id}] eval loss={eval_loss:.4f}, acc={eval_acc:.4f}")
+    print(f"[client {partition_id}] eval log_loss={eval_log_loss:.4f}, acc={eval_acc:.4f}")
 
     # Construct and return reply Message
     metrics = {
-        "eval_loss": eval_loss,
+        "eval_log_loss": eval_log_loss,
         "eval_acc": eval_acc,
         "num-examples": len(valloader.dataset),
     }

@@ -6,6 +6,7 @@ from model import Net
 from data_loader import load_data, load_centralized_dataset
 from model import test
 from flwr.app import MetricRecord, RecordDict
+import pandas as pd
 # Create ServerApp
 app = ServerApp()
 
@@ -39,6 +40,11 @@ def main(grid: Grid, context: Context) -> None:
         num_rounds=num_rounds,
         evaluate_fn=global_evaluate,
     )
+
+    print("Saving server side evaluation metrics...")
+    pd.json_normalize(result.evaluate_metrics_serverapp).to_csv("server_evaluate_metrics.csv", index=False)
+
+
 
     # Save final model to disk
     print("\nSaving final model to disk...")

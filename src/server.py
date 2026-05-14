@@ -42,33 +42,32 @@ def main(grid: Grid, context: Context) -> None:
     )
 
 
-    for client_id, metrics in result.evaluate_metrics_serverapp.items():
-        print(f"Client {client_id}: {metrics}")
 
-
-
-    # Save final model to disk
+      # Save final model to disk
     print("\nSaving final model to disk...")
     state_dict = result.arrays.to_torch_state_dict()
     torch.save(state_dict, "final_model.pt")
 
 
-def custom_aggregation_fn(
-    records: list[RecordDict], weighting_metric_name: str
-) -> MetricRecord:
-    
-    metrics = [record.metric_records['metrics'] for record in records]
-    total_accuracy = sum(metric["eval_acc"] for metric in metrics)
-    total_log_loss = sum(metric["eval_log_loss"] for metric in metrics)
-    num_clients = len(metrics)
+def save_results(metrics: RecordDict[MetricRecord]) -> None:
+    """Save evaluation metrics and final model to disk."""
+    rows = []
+    for round_num, metrics in metrics.items():
+        print(f"Collecting evaluation metrics for round {round_num}...")
+        rows.append(
+            {
+                "Round": round_num,
+                "Log_loss": round(metrics.get("log_loss"), 3),
+                "accuracy": round(metrics.get("accuracy"), 3),
+            }
+        )
 
-    avg_accuracy = total_accuracy / num_clients
-    avg_log_loss = total_log_loss / num_clients
+    if rows:
+        metrics_df = pd.DataFrame(rows)
+        metrics_df.to_csv("server_evaluate_metrics.csv", index=False)
 
-    return MetricRecord({
-        "avg_accuracy": round(avg_accuracy, 3),
-        "avg_log_loss": round(avg_log_loss, 3)
-    })
+  
+
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""

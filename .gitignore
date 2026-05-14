@@ -214,5 +214,5 @@ fabric.properties
 .venv
 PLAN.md
 GEMINI.md
-
+__pycache__/
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,pycharm,jetbrains

@@ -41,8 +41,9 @@ def main(grid: Grid, context: Context) -> None:
         evaluate_fn=global_evaluate,
     )
 
-    print("Saving server side evaluation metrics...")
-    pd.json_normalize(result.evaluate_metrics_serverapp).to_csv("server_evaluate_metrics.csv", index=False)
+
+    for client_id, metrics in result.evaluate_metrics_serverapp.items():
+        print(f"Client {client_id}: {metrics}")
 
 
 

@@ -8,10 +8,10 @@ from opacus.accountants import RDPAccountant
 from opacus.accountants.utils import get_noise_multiplier
 from opacus.accountants.analysis.rdp import compute_rdp, get_privacy_spent
 
-from model import Net, train as model_train, test as model_test, train_dp as model_train_dp
-from data_loader import load_data
+from .model import Net, train as model_train, test as model_test, train_dp as model_train_dp
+from .data_loader import load_data
 
-warnings.filterwarnings("ignore", category=UserWarning)
+#warnings.filterwarnings("ignore", category=UserWarning)
 
 app = ClientApp()
 

@@ -215,4 +215,5 @@ fabric.properties
 PLAN.md
 GEMINI.md
 __pycache__/
+quickstart-pytorch
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,pycharm,jetbrains

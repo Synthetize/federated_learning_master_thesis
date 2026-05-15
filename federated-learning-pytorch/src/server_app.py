@@ -2,9 +2,9 @@ import torch
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg, FedProx
-from model import Net
-from data_loader import load_data, load_centralized_dataset
-from model import test
+from .model import Net
+from .data_loader import load_data, load_centralized_dataset
+from .model import test
 from flwr.app import MetricRecord, RecordDict
 import pandas as pd
 # Create ServerApp
@@ -27,9 +27,9 @@ def main(grid: Grid, context: Context) -> None:
     # Initialize FedAvg strategy
     strategy = FedProx(
         fraction_evaluate=fraction_evaluate,
-        #evaluate_metrics_aggr_fn=custom_aggregation_fn
-        weighted_by_key="num-examples",
-        proximal_mu=0.1
+        # evaluate_metrics_aggr_fn=custom_aggregation_fn
+        # weighted_by_key="num-examples",
+        # proximal_mu=0.1
     )
 
     # Start strategy, run FedAvg for `num_rounds`
@@ -41,7 +41,9 @@ def main(grid: Grid, context: Context) -> None:
         evaluate_fn=global_evaluate,
     )
 
+    # save_results(result.evaluate_metrics_serverapp)
 
+    
 
       # Save final model to disk
     print("\nSaving final model to disk...")

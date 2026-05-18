@@ -3,11 +3,10 @@ from flwr_datasets import FederatedDataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from flwr_datasets.utils import divide_dataset
-from collections import Counter
-import pandas as pd
 from datasets import load_dataset
 
 fd = None
+fd_config = None
 
 train_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -22,17 +21,30 @@ def get_transform_fn(transform):
         return batch
     return apply_transforms
 
-def load_data(partition_id: int, num_partitions: int, batch_size: int):
-    global fd
-    if fd is None:
+def _get_federated_dataset(num_partitions: int, dirichlet_alpha: float) -> FederatedDataset:
+    global fd, fd_config
+    current_config = (num_partitions, float(dirichlet_alpha))
+
+    if fd is None or fd_config != current_config:
         partitioner = DirichletPartitioner(
             num_partitions=num_partitions, 
             partition_by="label",
-            alpha=0.1, 
+            alpha=float(dirichlet_alpha), 
             seed=42)
         fd = FederatedDataset(dataset="cifar10", partitioners={"train": partitioner})
+        fd_config = current_config
 
-    partition_train_val = fd.load_partition(partition_id)
+    return fd
+
+
+def load_data(
+    partition_id: int, num_partitions: int, batch_size: int, dirichlet_alpha: float
+):
+    dataset = _get_federated_dataset(
+        num_partitions=num_partitions, dirichlet_alpha=dirichlet_alpha
+    )
+
+    partition_train_val = dataset.load_partition(partition_id)
     train, valid = divide_dataset(partition_train_val, [0.8, 0.2])
 
     train = train.with_transform(get_transform_fn(train_transform))

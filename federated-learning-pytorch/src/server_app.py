@@ -1,9 +1,10 @@
 import torch
+from pathlib import Path
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
-from flwr.serverapp.strategy import FedAvg, FedProx
+from flwr.serverapp.strategy import FedProx
 from .model import Net
-from .data_loader import load_data, load_centralized_dataset
+from .data_loader import load_centralized_dataset
 from .model import test
 from flwr.app import RecordDict
 import pandas as pd
@@ -19,6 +20,13 @@ def main(grid: Grid, context: Context) -> None:
     fraction_evaluate: float = context.run_config["fraction-evaluate"]
     num_rounds: int = context.run_config["num-server-rounds"]
     lr: float = context.run_config["learning-rate"]
+    target_epsilon: float = context.run_config["target-epsilon"]
+    dirichlet_alpha: float = context.run_config["dirichlet-alpha"]
+    experiment_suffix = (
+        f"eps{target_epsilon}_"
+        f"alpha{dirichlet_alpha}"
+    )
+    results_dir = _get_results_dir_path()
 
     # Load global model
     global_model = Net()
@@ -42,17 +50,17 @@ def main(grid: Grid, context: Context) -> None:
     )
 
 
-    save_results(result)
+    save_results(result, experiment_suffix, results_dir)
 
       # Save final model to disk
-    print("\nSaving final model to disk...")
+    print(f"\nSaving final model to disk in {results_dir}...")
     state_dict = result.arrays.to_torch_state_dict()
-    torch.save(state_dict, "final_model.pt")
+    torch.save(state_dict, results_dir / f"final_model_{experiment_suffix}.pt")
 
-def _rounded_metric(metrics: MetricRecord, key: str) -> float | None:
-    value = metrics.get(key)
-    return round(float(value), 3) if value is not None else None
-
+def _get_results_dir_path() -> Path:
+    path = Path("results")
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 def _metrics_rows(metrics_by_round: dict[int, MetricRecord], source: str) -> list[dict]:
     rows = []
@@ -61,32 +69,39 @@ def _metrics_rows(metrics_by_round: dict[int, MetricRecord], source: str) -> lis
         rows.append(
             {
                 "Round": round_num,
-                "Log_loss": _rounded_metric(metrics, "log_loss"),
-                "accuracy": _rounded_metric(metrics, "accuracy"),
+                "log_loss": round(float(metrics.get("log_loss")), 3),
+                "accuracy": round(float(metrics.get("accuracy")), 3),
             }
         )
     return rows
 
-
-def save_results(result: RecordDict[MetricRecord]) -> None:
+def save_results(
+    result: RecordDict[MetricRecord],
+    experiment_suffix: str | None = None,
+    output_dir: Path | None = None,
+) -> None:
     """Save server/client evaluation metrics to disk."""
+    output_dir = output_dir if output_dir is not None else _get_results_dir_path()
+    server_filename = f"server_evaluate_metrics_{experiment_suffix}.csv"
+    client_filename = f"client_evaluate_metrics_{experiment_suffix}.csv"
+
     outputs = [
         (
             result.evaluate_metrics_serverapp,
             "server",
-            "server_evaluate_metrics.csv",
+            server_filename,
         ),
         (
             result.evaluate_metrics_clientapp,
             "client",
-            "client_evaluate_metrics.csv",
+            client_filename,
         ),
     ]
 
     for metrics_by_round, source, filename in outputs:
         rows = _metrics_rows(metrics_by_round, source)
         if rows:
-            pd.DataFrame(rows).to_csv(filename, index=False)
+            pd.DataFrame(rows).to_csv(output_dir / filename, index=False)
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""

@@ -37,6 +37,12 @@ python -m pip install "flwr[simulation]"\
 pip install -e .\
 flwr run . –stream
 
+Single run client number config:
+flwr run . --stream --federation-config "options.num-supernodes=2"
+
+Persistent: 
+flwr federation simulation-config --num-supernodes 20
+
 ## Config Record
 By using a ConfigRecord, values from serverapp can be sent to clientapp via the Message. ConfigRecord can be sent as part of the Message by passing it to the start of the choose strategy. By default it contains a key server-round so the client know the current round of the FL process. Value passed via start method are static, except the server-round.
 

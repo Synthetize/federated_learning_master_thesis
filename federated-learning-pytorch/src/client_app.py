@@ -11,7 +11,6 @@ from opacus.accountants.analysis.rdp import compute_rdp, get_privacy_spent
 from .model import Net, train as model_train, test as model_test, train_dp as model_train_dp
 from .data_loader import load_data
 
-#warnings.filterwarnings("ignore", category=UserWarning)
 
 app = ClientApp()
 
@@ -71,7 +70,8 @@ def train(msg: Message, context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
-    trainloader, _ = load_data(partition_id, num_partitions, batch_size)
+    dirichlet_alpha = float(context.run_config["dirichlet-alpha"])
+    trainloader, _ = load_data(partition_id, num_partitions, batch_size, dirichlet_alpha)
 
     # Read DP parameters from run_config
     max_grad_norm = float(context.run_config["max-grad-norm"])
@@ -123,12 +123,8 @@ def train(msg: Message, context: Context):
         epochs=context.run_config["local-epochs"],
     )
 
-    # print(
-    #     f"[client {partition_id}] epsilon(delta={target_delta})={epsilon:.2f}, "
-    #     f"noise={noise_multiplier}, max_grad_norm={max_grad_norm}, loss={train_loss:.4f}"
-    # )
 
-    print(f"[CLIENT {partition_id}] \n train loss={train_loss:.4f} \n epsilon(delta={target_delta})={epsilon:.2f} \n noise={noise_multiplier} \n max_grad_norm={max_grad_norm}")
+    #print(f"[CLIENT {partition_id}] \n train loss={train_loss:.4f} \n epsilon(delta={target_delta})={epsilon:.2f} \n noise={noise_multiplier} \n max_grad_norm={max_grad_norm}")
 
     # Use _unwrap_state_dict to strip the Opacus wrapper before sending back
     out_arrays = ArrayRecord(_unwrap_state_dict(private_model))
@@ -158,12 +154,13 @@ def evaluate(msg: Message, context: Context):
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
     batch_size = context.run_config["batch-size"]
-    _, valloader = load_data(partition_id, num_partitions, batch_size)
+    dirichlet_alpha = float(context.run_config["dirichlet-alpha"])
+    _, valloader = load_data(partition_id, num_partitions, batch_size, dirichlet_alpha)
 
     # Call the evaluation function
     eval_log_loss, eval_acc = model_test(model, valloader, device)
 
-    print(f"[client {partition_id}] eval log_loss={eval_log_loss:.4f}, acc={eval_acc:.4f}")
+    #print(f"[client {partition_id}] eval log_loss={eval_log_loss:.4f}, acc={eval_acc:.4f}")
 
     # Construct and return reply Message
     metrics = {

@@ -167,8 +167,8 @@ def evaluate(msg: Message, context: Context):
 
     # Construct and return reply Message
     metrics = {
-        "eval_log_loss": eval_log_loss,
-        "eval_acc": eval_acc,
+        "log_loss": eval_log_loss,
+        "accuracy": eval_acc,
         "num-examples": len(valloader.dataset),
     }
     metric_record = MetricRecord(metrics)

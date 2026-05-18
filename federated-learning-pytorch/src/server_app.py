@@ -41,20 +41,19 @@ def main(grid: Grid, context: Context) -> None:
         evaluate_fn=global_evaluate,
     )
 
-    # save_results(result.evaluate_metrics_serverapp)
 
-    
+    save_results(result)
 
       # Save final model to disk
     print("\nSaving final model to disk...")
     state_dict = result.arrays.to_torch_state_dict()
     torch.save(state_dict, "final_model.pt")
 
-
-def save_results(metrics: RecordDict[MetricRecord]) -> None:
+def save_results(result: RecordDict[MetricRecord]) -> None:
     """Save evaluation metrics and final model to disk."""
     rows = []
-    for round_num, metrics in metrics.items():
+
+    for round_num, metrics in result.evaluate_metrics_serverapp.items():
         print(f"Collecting evaluation metrics for round {round_num}...")
         rows.append(
             {
@@ -68,8 +67,20 @@ def save_results(metrics: RecordDict[MetricRecord]) -> None:
         metrics_df = pd.DataFrame(rows)
         metrics_df.to_csv("server_evaluate_metrics.csv", index=False)
 
-  
-
+    rows = []
+    for round_num, metrics in result.evaluate_metrics_clientapp.items():
+        print(f"Collecting client evaluation metrics for round {round_num}...")
+        rows.append(
+            {
+                "Round": round_num,
+                "Log_loss": round(metrics.get("log_loss"), 3),
+                "accuracy": round(metrics.get("accuracy"), 3),
+            }
+        )
+    
+    if rows:
+        metrics_df = pd.DataFrame(rows)
+        metrics_df.to_csv("client_evaluate_metrics.csv", index=False)
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""

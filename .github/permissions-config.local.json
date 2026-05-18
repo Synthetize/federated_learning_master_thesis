@@ -1,0 +1,34 @@
+{
+  "locations": {
+    "/home/ubuntu/Projects/federated_learning_master_thesis": {
+      "tool_approvals": [
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "../.venv/bin/flwr"
+          ]
+        },
+        {
+          "kind": "write"
+        },
+        {
+          "kind": "memory"
+        }
+      ],
+      "permissions": {
+        "deny": [
+          "**/__pycache__/**",
+          "**/.venv/**",
+          "**/*.egg-info/**",
+          "**/node_modules/**",
+          "**/dist/**",
+          "**/build/**",
+          "**/.next/**",
+          "**/coverage/**",
+          "**/target/**",
+          "**/vendor/**"
+        ]
+      }
+    }
+  }
+}

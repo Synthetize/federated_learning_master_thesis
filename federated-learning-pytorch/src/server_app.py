@@ -5,7 +5,7 @@ from flwr.serverapp.strategy import FedAvg, FedProx
 from .model import Net
 from .data_loader import load_data, load_centralized_dataset
 from .model import test
-from flwr.app import MetricRecord, RecordDict
+from flwr.app import RecordDict
 import pandas as pd
 # Create ServerApp
 app = ServerApp()
@@ -49,38 +49,44 @@ def main(grid: Grid, context: Context) -> None:
     state_dict = result.arrays.to_torch_state_dict()
     torch.save(state_dict, "final_model.pt")
 
+def _rounded_metric(metrics: MetricRecord, key: str) -> float | None:
+    value = metrics.get(key)
+    return round(float(value), 3) if value is not None else None
+
+
+def _metrics_rows(metrics_by_round: dict[int, MetricRecord], source: str) -> list[dict]:
+    rows = []
+    for round_num, metrics in sorted(metrics_by_round.items()):
+        print(f"Collecting {source} evaluation metrics for round {round_num}...")
+        rows.append(
+            {
+                "Round": round_num,
+                "Log_loss": _rounded_metric(metrics, "log_loss"),
+                "accuracy": _rounded_metric(metrics, "accuracy"),
+            }
+        )
+    return rows
+
+
 def save_results(result: RecordDict[MetricRecord]) -> None:
-    """Save evaluation metrics and final model to disk."""
-    rows = []
+    """Save server/client evaluation metrics to disk."""
+    outputs = [
+        (
+            result.evaluate_metrics_serverapp,
+            "server",
+            "server_evaluate_metrics.csv",
+        ),
+        (
+            result.evaluate_metrics_clientapp,
+            "client",
+            "client_evaluate_metrics.csv",
+        ),
+    ]
 
-    for round_num, metrics in result.evaluate_metrics_serverapp.items():
-        print(f"Collecting evaluation metrics for round {round_num}...")
-        rows.append(
-            {
-                "Round": round_num,
-                "Log_loss": round(metrics.get("log_loss"), 3),
-                "accuracy": round(metrics.get("accuracy"), 3),
-            }
-        )
-
-    if rows:
-        metrics_df = pd.DataFrame(rows)
-        metrics_df.to_csv("server_evaluate_metrics.csv", index=False)
-
-    rows = []
-    for round_num, metrics in result.evaluate_metrics_clientapp.items():
-        print(f"Collecting client evaluation metrics for round {round_num}...")
-        rows.append(
-            {
-                "Round": round_num,
-                "Log_loss": round(metrics.get("log_loss"), 3),
-                "accuracy": round(metrics.get("accuracy"), 3),
-            }
-        )
-    
-    if rows:
-        metrics_df = pd.DataFrame(rows)
-        metrics_df.to_csv("client_evaluate_metrics.csv", index=False)
+    for metrics_by_round, source, filename in outputs:
+        rows = _metrics_rows(metrics_by_round, source)
+        if rows:
+            pd.DataFrame(rows).to_csv(filename, index=False)
 
 def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
     """Evaluate model on central data."""

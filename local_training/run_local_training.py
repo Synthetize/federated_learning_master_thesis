@@ -6,74 +6,22 @@ import sys
 from pathlib import Path
 import tomllib
 
+from src.data_loader import load_data, load_centralized_dataset
+from src.model import Net, test as model_test
 import torch
 
 
-def _repo_root() -> Path:
+def _get_root_folder() -> Path:
     return Path(__file__).resolve().parents[1]
 
-
-def _add_flwr_src_to_path() -> None:
-    flwr_root = _repo_root() / "federated-learning-pytorch"
-    sys.path.insert(0, str(flwr_root))
-
-
-def _device() -> torch.device:
-    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-def _set_seed(seed: int | None) -> None:
-    if seed is None:
-        return
-    random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def _load_config(path: Path) -> dict:
+def _load_config_file(path: Path) -> dict:
     if not path.is_file():
         raise FileNotFoundError(f"Config file not found: {path}")
     with path.open("rb") as handle:
         return tomllib.load(handle)
 
 
-def _require(config: dict, key: str) -> None:
-    if key not in config:
-        raise KeyError(f"Missing required config key: {key}")
-
-
-def _parse_config(config: dict) -> dict:
-    for key in ["num_partitions", "batch_size", "learning_rate", "epochs", "dirichlet_alpha", "early_stopping_patience"]:
-        _require(config, key)
-
-    parsed = {
-        "num_partitions": int(config["num_partitions"]),
-        "batch_size": int(config["batch_size"]),
-        "learning_rate": float(config["learning_rate"]),
-        "epochs": int(config["epochs"]),
-        "dirichlet_alpha": float(config["dirichlet_alpha"]),
-        "early_stopping_patience": int(config["early_stopping_patience"]),
-        "seed": config.get("seed"),
-    }
-
-    if parsed["num_partitions"] <= 0:
-        raise ValueError("num_partitions must be > 0")
-    if parsed["batch_size"] <= 0:
-        raise ValueError("batch_size must be > 0")
-    if parsed["epochs"] <= 0:
-        raise ValueError("epochs must be > 0")
-    if parsed["learning_rate"] <= 0:
-        raise ValueError("learning_rate must be > 0")
-    if parsed["dirichlet_alpha"] <= 0:
-        raise ValueError("dirichlet_alpha must be > 0")
-    if parsed["early_stopping_patience"] <= 0:
-        raise ValueError("early_stopping_patience must be > 0")
-
-    return parsed
-
-
-def train_with_validation(net, train_loader, val_loader, epochs, lr, device, patience):
+def train(net, train_loader, val_loader, epochs, lr, device, patience):
     """Train with validation monitoring and early stopping.
     
     Uses Adam optimizer with ReduceLROnPlateau scheduler.
@@ -142,54 +90,37 @@ def train_with_validation(net, train_loader, val_loader, epochs, lr, device, pat
     return avg_train_loss, best_val_loss, epochs_completed
 
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Local training baseline per client partition")
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "--config",
         default="local_training/config.toml",
-        help="Path to the local training config file",
     )
     args = parser.parse_args()
+    configs = _load_config_file(Path(args.config))
 
-    _add_flwr_src_to_path()
-
-    from src.data_loader import load_data, load_centralized_dataset
-    from src.model import Net, test as model_test
-
-    config_path = Path(args.config)
-    parsed = _parse_config(_load_config(config_path))
-
-    seed = parsed["seed"]
-    if seed is not None:
-        parsed["seed"] = int(seed)
-    _set_seed(parsed["seed"])
-
-    output_dir = _repo_root() / "local_training" / "results"
+    output_dir = _get_root_folder() / "local_training" / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    device = _device()
-    num_partitions = parsed["num_partitions"]
-    batch_size = parsed["batch_size"]
-    lr = parsed["learning_rate"]
-    epochs = parsed["epochs"]
-    dirichlet_alpha = parsed["dirichlet_alpha"]
-    early_stopping_patience = parsed["early_stopping_patience"]
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    central_test_loader = load_centralized_dataset(batch_size=batch_size)
+    central_test_loader = load_centralized_dataset(batch_size=configs["batch_size"])["test"]
 
     # Collect per-partition results
     results: list[dict] = []
 
-    for partition_id in range(num_partitions):
+    for partition_id in range(configs["num_partitions"]):
         train_loader, val_loader = load_data(
             partition_id=partition_id,
-            num_partitions=num_partitions,
-            batch_size=batch_size,
-            dirichlet_alpha=dirichlet_alpha,
+            num_partitions=configs["num_partitions"],
+            batch_size=configs["batch_size"],
+            dirichlet_alpha=configs["dirichlet_alpha"],
         )
         model = Net()
-        train_loss, best_val_loss, epochs_completed = train_with_validation(
-            model, train_loader, val_loader, epochs, lr, device, early_stopping_patience
+        train_loss, best_val_loss, epochs_completed = train(
+            model, train_loader, val_loader, configs["epochs"], configs["learning_rate"], device, configs["early_stopping_patience"]
         )
 
         central_log_loss, central_acc = model_test(model, central_test_loader, device)
@@ -201,17 +132,12 @@ def main() -> None:
         })
 
     # Write CSV with config section (top) + results section (bottom)
-    summary_path = output_dir / f"results_{num_partitions}c_{epochs}e.csv"
+    summary_path = output_dir / f"results_{configs['num_partitions']}c_{configs['epochs']}e.csv"
     with summary_path.open("w", newline="") as f:
         # Config section
         f.write("# Configuration\n")
-        f.write(f"num_partitions,{num_partitions}\n")
-        f.write(f"batch_size,{batch_size}\n")
-        f.write(f"learning_rate,{lr}\n")
-        f.write(f"epochs,{epochs}\n")
-        f.write(f"dirichlet_alpha,{dirichlet_alpha}\n")
-        f.write(f"early_stopping_patience,{early_stopping_patience}\n")
-        f.write(f"seed,{parsed['seed']}\n")
+        f.write(f"num_partitions, batch_size, learning_rate, epochs, dirichlet_alpha, early_stopping_patience, seed\n")
+        f.write(f"{configs['num_partitions']}, {configs['batch_size']}, {configs['learning_rate']}, {configs['epochs']}, {configs['dirichlet_alpha']}, {configs['early_stopping_patience']}, {configs['seed']}\n")
         
         # Results section
         f.write("\n# Results\n")

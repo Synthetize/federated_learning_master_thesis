@@ -1,0 +1,7 @@
+num_partitions = 5
+batch_size = 32
+learning_rate = 0.1
+epochs = 100
+dirichlet_alpha = 0.1
+early_stopping_patience = 3
+seed = 42

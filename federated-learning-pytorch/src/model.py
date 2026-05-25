@@ -23,24 +23,24 @@ class Net(nn.Module):
         return self.fc3(x)
 
 
-def train(net, trainloader, epochs, lr, device):
-    """Train the model on the training set."""
-    net.to(device) 
-    criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
-    net.train()
-    running_loss = 0.0
-    for _ in range(epochs):
-        for batch in trainloader:
-            images = batch["img"].to(device)
-            labels = batch["label"].to(device)
-            optimizer.zero_grad()
-            loss = criterion(net(images), labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-    avg_trainloss = running_loss / (epochs * len(trainloader))
-    return avg_trainloss
+# def train(net, trainloader, epochs, lr, device):
+#     """Train the model on the training set."""
+#     net.to(device) 
+#     criterion = torch.nn.CrossEntropyLoss().to(device)
+#     optimizer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9)
+#     net.train()
+#     running_loss = 0.0
+#     for _ in range(epochs):
+#         for batch in trainloader:
+#             images = batch["img"].to(device)
+#             labels = batch["label"].to(device)
+#             optimizer.zero_grad()
+#             loss = criterion(net(images), labels)
+#             loss.backward()
+#             optimizer.step()
+#             running_loss += loss.item()
+#     avg_trainloss = running_loss / (epochs * len(trainloader))
+#     return avg_trainloss
 
 
 def train_dp(net, train_loader, privacy_engine, optimizer, target_delta, device, epochs=1):

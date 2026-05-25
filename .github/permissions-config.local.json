@@ -13,22 +13,26 @@
         },
         {
           "kind": "memory"
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "mkdir"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "./.venv/bin/python"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "rm"
+          ]
         }
-      ],
-      "permissions": {
-        "deny": [
-          "**/__pycache__/**",
-          "**/.venv/**",
-          "**/*.egg-info/**",
-          "**/node_modules/**",
-          "**/dist/**",
-          "**/build/**",
-          "**/.next/**",
-          "**/coverage/**",
-          "**/target/**",
-          "**/vendor/**"
-        ]
-      }
+      ]
     }
   }
 }

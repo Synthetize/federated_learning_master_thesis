@@ -218,5 +218,5 @@ __pycache__/
 quickstart-pytorch
 plan.md
 results
-
+local_training_plan.md
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,pycharm,jetbrains

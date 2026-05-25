@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./federated-learning-pytorch"
+    ]
+}

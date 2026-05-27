@@ -1,6 +1,7 @@
 import torch
 from pathlib import Path
-from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
+from typing import Iterable
+from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord, Message
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedProx
 from .model import Net
@@ -11,6 +12,16 @@ import pandas as pd
 # Create ServerApp
 app = ServerApp()
 
+
+class CustomFedProx(FedProx):
+    def configure_train(self, server_round: int, arrays: ArrayRecord, config: ConfigRecord, grid: Grid
+    ) -> Iterable[Message]:
+        # decrease learning rate by half every 10 rounds
+        if server_round > 1 and server_round % 10 == 0:
+            config["lr"] *= 0.5
+            print(f"[Round {server_round}] LR → {config['lr']:.6f}")
+
+        return super().configure_train(server_round, arrays, config, grid)
 
 @app.main()
 def main(grid: Grid, context: Context) -> None:
@@ -33,11 +44,11 @@ def main(grid: Grid, context: Context) -> None:
     arrays = ArrayRecord(global_model.state_dict())
 
     # Initialize FedAvg strategy
-    strategy = FedProx(
+    strategy = CustomFedProx(
         fraction_evaluate=fraction_evaluate,
         # evaluate_metrics_aggr_fn=custom_aggregation_fn
         # weighted_by_key="num-examples",
-        # proximal_mu=0.1
+        proximal_mu=0.1
     )
 
     # Start strategy, run FedAvg for `num_rounds`
@@ -52,7 +63,6 @@ def main(grid: Grid, context: Context) -> None:
 
     save_results(result, experiment_suffix, results_dir)
 
-      # Save final model to disk
     print(f"\nSaving final model to disk in {results_dir}...")
     state_dict = result.arrays.to_torch_state_dict()
     torch.save(state_dict, results_dir / f"final_model_{experiment_suffix}.pt")

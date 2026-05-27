@@ -31,6 +31,36 @@
           "commandIdentifiers": [
             "rm"
           ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "../../.venv/bin/flwr"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "tee"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "../.venv/bin/flwr-simulation"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            "../.venv/bin/python"
+          ]
+        },
+        {
+          "kind": "commands",
+          "commandIdentifiers": [
+            ".venv/bin/pip"
+          ]
         }
       ]
     }

@@ -19,13 +19,26 @@ def _load_config_file(path: Path) -> dict:
         raise FileNotFoundError(f"Config file not found: {path}")
     with path.open("rb") as handle:
         return tomllib.load(handle)
-
+    
+def _save_results(results: list[dict], output_dir: Path, configs: dict) -> None:
+    summary_path = output_dir / f"results_{configs['num_partitions']}c_{configs['epochs']}e.csv"
+    with summary_path.open("w", newline="") as f:
+        # Config section
+        f.write("# Configuration\n")
+        f.write(f"num_partitions, batch_size, learning_rate, epochs, dirichlet_alpha, early_stopping_patience, seed\n")
+        f.write(f"{configs['num_partitions']}, {configs['batch_size']}, {configs['learning_rate']}, {configs['epochs']}, {configs['dirichlet_alpha']}, {configs['early_stopping_patience']}, {configs['seed']}\n")
+        
+        # Results section
+        f.write("\n# Results\n")
+        f.write("partition_id,log_loss,accuracy\n")
+        for row in results:
+            f.write(f"{row['partition_id']},{row['log_loss']},{row['accuracy']}\n")
 
 def train(net, train_loader, val_loader, epochs, lr, device, patience):
     """Train with validation monitoring and early stopping.
     
     Uses Adam optimizer with ReduceLROnPlateau scheduler.
-    Returns: (avg_train_loss, best_val_loss, epochs_completed)
+    Returns: (avg_train_loss, best_val_loss, epochs_completed, best_model_state)
     """
     import torch.optim as optim
     from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -78,6 +91,7 @@ def train(net, train_loader, val_loader, epochs, lr, device, patience):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             patience_counter = 0
+            best_model_state = net.state_dict()
         else:
             patience_counter += 1
             if patience_counter >= patience:
@@ -87,7 +101,7 @@ def train(net, train_loader, val_loader, epochs, lr, device, patience):
         epochs_completed = epoch + 1
     
     avg_train_loss = total_train_loss / epochs_completed
-    return avg_train_loss, best_val_loss, epochs_completed
+    return avg_train_loss, best_val_loss, epochs_completed, best_model_state
 
 
 
@@ -106,7 +120,7 @@ def main() -> None:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    central_test_loader = load_centralized_dataset(batch_size=configs["batch_size"])["test"]
+    test_split_dataset = load_centralized_dataset(batch_size=configs["batch_size"])["test"]
 
     # Collect per-partition results
     results: list[dict] = []
@@ -119,31 +133,21 @@ def main() -> None:
             dirichlet_alpha=configs["dirichlet_alpha"],
         )
         model = Net()
-        train_loss, best_val_loss, epochs_completed = train(
+        train_loss, best_val_loss, epochs_completed, best_model_state = train(
             model, train_loader, val_loader, configs["epochs"], configs["learning_rate"], device, configs["early_stopping_patience"]
         )
 
-        central_log_loss, central_acc = model_test(model, central_test_loader, device)
+        log_loss, accuracy = model_test(model, test_split_dataset, device)
 
         results.append({
             "partition_id": partition_id,
-            "log_loss": round(float(central_log_loss), 4),
-            "accuracy": round(float(central_acc), 4),
+            "log_loss": round(float(log_loss), 4),
+            "accuracy": round(float(accuracy), 4),
         })
 
-    # Write CSV with config section (top) + results section (bottom)
-    summary_path = output_dir / f"results_{configs['num_partitions']}c_{configs['epochs']}e.csv"
-    with summary_path.open("w", newline="") as f:
-        # Config section
-        f.write("# Configuration\n")
-        f.write(f"num_partitions, batch_size, learning_rate, epochs, dirichlet_alpha, early_stopping_patience, seed\n")
-        f.write(f"{configs['num_partitions']}, {configs['batch_size']}, {configs['learning_rate']}, {configs['epochs']}, {configs['dirichlet_alpha']}, {configs['early_stopping_patience']}, {configs['seed']}\n")
-        
-        # Results section
-        f.write("\n# Results\n")
-        f.write("partition_id,log_loss,accuracy\n")
-        for row in results:
-            f.write(f"{row['partition_id']},{row['log_loss']},{row['accuracy']}\n")
+        torch.save(best_model_state, output_dir / f"best_model_partition_{partition_id}.pth")
+        _save_results(results, output_dir, configs)
+
 
 
 if __name__ == "__main__":

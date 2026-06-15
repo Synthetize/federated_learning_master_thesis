@@ -8,48 +8,48 @@ from opacus.accountants import RDPAccountant
 from opacus.accountants.utils import get_noise_multiplier
 from opacus.accountants.analysis.rdp import compute_rdp, get_privacy_spent
 
-from .model import Net, train as model_train, test as model_test, train_dp as model_train_dp
+from .model import Net, test as model_test, train_dp as model_train_dp
 from .data_loader import load_data
 
 
 app = ClientApp()
 
 
-def log_cumulative_epsilon(context, trainloader, noise_multiplier, sample_rate, target_delta):
-    """Calcola e stampa l'epsilon totale accumulato usando lo stato persistente del client."""
-    try:
-        # In Flower ServerApp, lo stato si gestisce tramite config_records (che è un RecordSet)
-        if "comm_state" not in context.state.config_records:
-            current_round = 1
-        else:
-            current_round = int(context.state.config_records["comm_state"]["round"]) + 1
+# def log_cumulative_epsilon(context, trainloader, noise_multiplier, sample_rate, target_delta):
+#     """Calcola e stampa l'epsilon totale accumulato usando lo stato persistente del client."""
+#     try:
+#         # In Flower ServerApp, lo stato si gestisce tramite config_records (che è un RecordSet)
+#         if "comm_state" not in context.state.config_records:
+#             current_round = 1
+#         else:
+#             current_round = int(context.state.config_records["comm_state"]["round"]) + 1
         
-        # Salviamo il round corrente nello stato per il prossimo utilizzo
-        context.state.config_records["comm_state"] = ConfigRecord({"round": current_round})
+#         # Salviamo il round corrente nello stato per il prossimo utilizzo
+#         context.state.config_records["comm_state"] = ConfigRecord({"round": current_round})
 
-        # Passi totali = (passi per epoca) * (epoche per round) * (numero di round)
-        steps_per_epoch = len(trainloader)
-        local_epochs = context.run_config["local-epochs"]
-        total_steps = steps_per_epoch * local_epochs * current_round
+#         # Passi totali = (passi per epoca) * (epoche per round) * (numero di round)
+#         steps_per_epoch = len(trainloader)
+#         local_epochs = context.run_config["local-epochs"]
+#         total_steps = steps_per_epoch * local_epochs * current_round
         
-        # Calcolo offline dell'epsilon cumulativo usando RDP
-        orders = [1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64))
-        rdp = compute_rdp(
-            q=sample_rate,
-            noise_multiplier=noise_multiplier,
-            steps=total_steps,
-            orders=orders
-        )
-        cum_eps, _ = get_privacy_spent(
-            orders=orders,
-            rdp=rdp,
-            delta=target_delta
-        )
+#         # Calcolo offline dell'epsilon cumulativo usando RDP
+#         orders = [1 + x / 10.0 for x in range(1, 100)] + list(range(12, 64))
+#         rdp = compute_rdp(
+#             q=sample_rate,
+#             noise_multiplier=noise_multiplier,
+#             steps=total_steps,
+#             orders=orders
+#         )
+#         cum_eps, _ = get_privacy_spent(
+#             orders=orders,
+#             rdp=rdp,
+#             delta=target_delta
+#         )
         
-        print(f"\n>>> [TEST] CUMULATIVE EPSILON al Round {current_round}: {cum_eps:.4f}")
-    except Exception as e:
-        print(f">>> [DEBUG] log_cumulative_epsilon failed: {e}")
-        pass
+#         print(f"\n>>> [TEST] CUMULATIVE EPSILON al Round {current_round}: {cum_eps:.4f}")
+#     except Exception as e:
+#         print(f">>> [DEBUG] log_cumulative_epsilon failed: {e}")
+#         pass
 
 
 def _device() -> torch.device:
@@ -91,7 +91,7 @@ def train(msg: Message, context: Context):
         epochs=total_epochs,
     )
 
-    log_cumulative_epsilon(context, trainloader, noise_multiplier, sample_rate, target_delta)
+    #log_cumulative_epsilon(context, trainloader, noise_multiplier, sample_rate, target_delta)
 
     # Load the model and initialize it with the received weights
     model = Net().to(device)
@@ -102,7 +102,7 @@ def train(msg: Message, context: Context):
         model.parameters(),
         lr=msg.content["config"]["lr"],
     )
-    # Attach Opacus PrivacyEngine — wraps model, optimizer, and dataloader
+    # Attach Opacus PrivacyEngine wraps model, optimizer, and dataloader
     privacy_engine = PrivacyEngine(secure_mode=False)
     private_model, optimizer, private_trainloader = privacy_engine.make_private(
         module=model,

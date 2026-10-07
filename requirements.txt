@@ -1,0 +1,9 @@
+flwr[simulation]
+flwr-datasets[vision]
+torch
+torchvision
+opacus
+matplotlib
+pandas
+ipykernel
+medmnist

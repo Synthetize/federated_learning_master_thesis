@@ -44,8 +44,13 @@ from torch.utils.data import DataLoader, Dataset
 # ===================================================================== configurazione
 # DEVE combaciare con quella dello sweep federato, altrimenti il confronto contro cui si
 # definisce il failure point non e' pulito.
-ALPHAS = [0.4]
-SEEDS = [42, 43, 44]
+# Stessa convenzione del package federated (vedi federated/paths.py): il nome della
+# cartella usa f"alpha_{alpha:g}", quindi 10.0 -> "alpha_10" e 1.0 -> "alpha_1".
+# Prima lo sweep federato scriveva "alpha_10" e questo script "alpha_10.0": due
+# cartelle che dca.py normalizza entrambe con float() e che quindi collassavano sulla
+# stessa chiave in _local_files(), sovrascrivendosi a vicenda.
+ALPHAS = [10.0, 1.0, 0.5, 0.4, 0.3, 0.2]
+SEEDS = [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
 NUM_CLIENTS = 6
 MIN_PARTITION_SIZE = 500
 PARTITION_MAX_RETRIES = 50
@@ -248,7 +253,7 @@ def train_best_on_val(trainloader, valloader, epochs, tag="", log_every=25):
 
 # ===================================================================== baseline locali
 def local_dir(alpha) -> str:
-    return os.path.join(OUT_DIR, f"alpha_{alpha}")
+    return os.path.join(OUT_DIR, f"alpha_{float(alpha):g}")
 
 
 def local_path(alpha, seed, client) -> str:
@@ -377,5 +382,12 @@ if __name__ == "__main__":
     if what in ("all", "local"):
         run_local()
     if what in ("all", "central"):
-        run_central()
+        # run_central() NON viene piu' chiamata: il blocco commentato qui sopra allenava UN
+        # SOLO modello centralizzato, sul seed 42. Ma lo split 80/20 del test set dipende dal
+        # seed (full.train_test_split(..., seed=seed)), quindi un modello allenato sul pool
+        # del seed 42 non e' valutabile sul test set del seed 43: gran parte di quel test set
+        # era nel suo training. Serve un modello per seed, ed e' il lavoro di central_seeds.py.
+        # Il blocco resta commentato come riferimento storico.
+        print("\nmodelli centralizzati: esegui  python central_seeds.py")
+        print("(uno per seed. run_central() qui dentro e' superata: vedi il commento nel codice)")
     summary()

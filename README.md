@@ -33,12 +33,21 @@ Three verdicts come out of the analysis:
 ## Repository layout
 
 ```
-malaria_dpsgd.ipynb      [1] the federated sweep  -> results/malaria/
+federated/               [1] the federated sweep, as a package -> results/malaria/
+  config.py                  ExperimentConfig: the single source of truth
+  paths.py                   every output path + the fixed-partition replicate index
+  model.py                   Net, DP-SGD training, FedProx proximal term, evaluation
+  dataset.py                 Dirichlet partitioning, loaders, pooled validation set
+  privacy.py                 sigma per client, noise/signal preview, sigma table
+  app.py                     Flower ClientApp + per-round centralised evaluation
+  sweep.py                   one run, saving, the sweep loop, the CLI
+  report.py                  aggregate tables and diagnostic figures
 baselines.py             [2] non-federated baselines -> results/baselines/
 central_seeds.py         [2b] one centralised run per seed (fixes a seed bug)
 dca.py                   [3] the analysis: DCA, costs, Safe Range -> results/dca/
 cell_images_32/          the dataset, pre-resized to 32x32
 results/                 every artefact produced by the three stages
+legacy/malaria_dpsgd.ipynb   the notebook this package replaced, kept for its diagnostics
 requirements.txt         dependencies
 ```
 
@@ -49,9 +58,25 @@ skips whatever it already finds on disk, so a run can be interrupted and relaunc
 
 ## What each file does
 
-### `malaria_dpsgd.ipynb` — the federated sweep
+### `federated/` — the federated sweep
 
-The main experiment. 33 cells, organised in numbered sections:
+The main experiment. Until 7 October 2026 this was a 33-cell notebook
+(`legacy/malaria_dpsgd.ipynb`); it is now a package, module by module:
+
+| Module | What it holds |
+|---|---|
+| `config.py` | `ExperimentConfig`, the single source of truth for every hyperparameter, plus a DP-accounting guard that refuses a batch size too close to the smallest client's training split. Also `REPO_ROOT` / `RESULTS_ROOT`, so paths no longer depend on the working directory |
+| `paths.py` | Every output path, one naming convention (`alpha_{alpha:g}`), and `set_replicate()` for fixed-partition repeats |
+| `model.py` | `Net` (3 conv blocks, **GroupNorm** not BatchNorm — BatchNorm is incompatible with per-sample gradients), `train` (DP-SGD + the decoupled FedProx proximal step), `test`, `evaluate_with_probs` |
+| `dataset.py` | Dataset discovery, Dirichlet partitioning into 6 clients, the 80/20 split of the global test set, the per-client 80/20 split, the **pooled validation set**, and `preflight_partitions()` |
+| `privacy.py` | Opacus' `get_noise_multiplier` asked for the sigma each client will need, *before* any training starts, plus `sigma_table()` |
+| `app.py` | The Flower `ClientApp` (local DP-SGD + proximal term) and `make_global_evaluate` (centralised evaluation per round, test **and** validation streams) |
+| `sweep.py` | One run, saving, the seed → alpha → epsilon loop with `skip_completed` resumption and a `max_hours` wall clock, the replicate sub-sweep, and the CLI |
+| `report.py` | Reads every result back from disk, aggregates over seeds with mean ± 1.96·SE, exports the summary CSVs |
+
+The diagnostics that used to live in notebook sections 7.1–7.3 were already fully
+commented out and were **not** ported. They are the record of *why* the config looks the
+way it does, and they stay in `legacy/` — see `legacy/README.md`.
 
 | Section | What it holds |
 |---|---|
@@ -121,16 +146,20 @@ test_labels_s<seed>.npy                       raw 0/1 labels
 local_meta.csv                                n_train, val acc, chosen epoch, test acc, duration
 ```
 
-> ⚠️ **Known bug.** `run_central()` is commented out at
-> [baselines.py:328](baselines.py#L328) but still called at
-> [baselines.py:380](baselines.py#L380), so `python baselines.py` and
-> `python baselines.py central` both die with `NameError: name 'run_central' is not
-> defined`. Use `python baselines.py local` for the local models and
-> `python central_seeds.py` for the centralised ones — which is the better route
-> anyway, see below. Uncommenting the block restores the old single-run behaviour.
+> **Fixed, 7 October 2026.** `run_central()` used to be commented out while still being
+> called, so `python baselines.py` and `python baselines.py central` died with
+> `NameError: name 'run_central' is not defined`. The dispatch no longer calls it and
+> prints which script to run instead. The block stays commented as a historical
+> reference and should **not** be reactivated: it trained a single centralised model on
+> seed 42, and since the seed also fixes the 80/20 test split, that model cannot be
+> scored on another seed's test set. `central_seeds.py` is the correct route.
 
-> ⚠️ `ALPHAS` in `baselines.py` is set to `[0.4]`, while `results/baselines/` already
-> holds every alpha from a previous full run. Widen the list if you need to retrain.
+> **Also fixed.** `ALPHAS` was `[0.4]` and `SEEDS` was `[42, 43, 44]`; both now cover the
+> full grid (6 alphas x 10 seeds). And `local_dir()` now formats the alpha as
+> `f"alpha_{alpha:g}"`, the same convention as `federated/paths.py`: the sweep used to
+> write `alpha_10` while this script wrote `alpha_10.0`, two directories that `dca.py`
+> normalises with `float()` and that therefore collapsed onto the same key in
+> `_local_files()`, overwriting each other.
 
 ### `central_seeds.py` — one centralised run per seed
 
@@ -260,38 +289,58 @@ ignored, so `git add -A` would commit them.
 
 ```bash
 source .venv/bin/activate
-jupyter lab malaria_dpsgd.ipynb      # or open it in VS Code
-```
-
-Run the cells in order. Sections 7.1–7.3 are diagnostics and are commented out —
-leave them that way.
-
-Before launching section 7, set your time budget in section 2:
-
-```python
-max_hours: float = 8.0   # the sweep stops cleanly after N hours and resumes on relaunch
+python -m federated.sweep --help          # every option
+python -m federated.sweep --preflight-only # check all alpha x seed partitions, then exit
+python -m federated.sweep                  # the full grid
 ```
 
 The loop is ordered seed → alpha → epsilon, so an interruption leaves whole seeds
-finished rather than all of them half-done. `skip_completed = True` makes a relaunch
-pick up exactly where it stopped. Section 5 prints the sigma each client will need
-*before* training, which is the cheapest way to catch an impossible budget.
+finished rather than all of them half-done. `--skip-completed` is the default, so a
+relaunch picks up exactly where it stopped; `--max-hours 8` stops cleanly after a time
+budget. `--dp-preview` prints the sigma each client will need *before* training, which is
+the cheapest way to catch an impossible budget.
 
-To shrink the grid for a smoke test, narrow `alphas`, `seeds`, `target_epsilons` and
-`num_rounds` in section 2 — **and change the output root** so a test run cannot write
-into `results/malaria/`, which holds the real results.
+For a smoke test, narrow the grid on the command line — no need to edit the config:
+
+```bash
+python -m federated.sweep --alphas 10 --seeds 42 --epsilons inf --rounds 10
+```
+
+Set `FL_RESULTS_ROOT` to send a test run somewhere other than `results/`, which holds
+the real results:
+
+```bash
+FL_RESULTS_ROOT=/tmp/fl_smoke python -m federated.sweep --alphas 10 --seeds 42 --rounds 5
+```
+
+Fixed-partition repeats, once the main sweep is done. They separate the Dirichlet draw's
+variance from DP-SGD's: the same `(alpha, seed, epsilon)` relaunched gives the same
+partition and the same test set with different noise, and the output goes to
+`alpha_<a>_seed<s>_rep<N>/` without touching the main directories.
+
+```bash
+python -m federated.sweep --replicates 4 --alphas 0.3 --seeds 42 --epsilons 0.5 8
+```
+
+Then the summary tables:
+
+```bash
+python -m federated.report --plots
+```
 
 ### 2. The baselines
 
 ```bash
 source .venv/bin/activate
-python baselines.py local     # 6 clients x 3 seeds x alphas, 100 epochs each
+python baselines.py local     # 6 clients x 10 seeds x 6 alphas, 100 epochs each
 python central_seeds.py       # one centralised model per seed
 ```
 
-`python baselines.py` and `python baselines.py central` are currently broken (see the
-bug note above) — use these two commands instead. Both skip whatever is already on
-disk. `central_seeds.py` accepts an explicit seed list:
+`python baselines.py` without an argument also works again (it runs the local models and
+then tells you to launch `central_seeds.py`); `local` is just the explicit form. Both
+skip whatever is already on disk. **Do not skip this stage for a new seed**: the seed
+fixes the 80/20 test split, so every seed needs its own references or `dca.py` discards
+it. `central_seeds.py` accepts an explicit seed list:
 
 ```bash
 python central_seeds.py 43 44
@@ -342,5 +391,9 @@ effect. Never quote `"best"` as a headline result.
 Runs are **not** bit-reproducible, and the thesis declares this among its limitations.
 `set_seeds()` reseeds the main process only: it does not reseed the Ray actors that run
 the simulated clients, nor Opacus' noise generator. Averages over seeds should be read
-as estimates with variance, which is exactly why `dca.py` reports a half-range for
-every quantity.
+as estimates with variance.
+
+With three draws the only available statistic was the half-range, which is what `dca.py`
+still reports. With ten it becomes mean ± 1.96·SE, the standard quantity — and the
+non-reproducibility above is also what makes fixed-partition repeats free: relaunching
+the same cell resamples the DP noise while keeping the partition.

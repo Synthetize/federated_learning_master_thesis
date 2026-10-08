@@ -261,17 +261,21 @@ on CPU — slowly. The full sweep is measured in days of compute, not hours.
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+# ROCm builds of torch/torchvision, not on PyPI: they must come before requirements.txt
+python -m pip install --index-url https://stable.repo.amd.com/rocm/whl-next/ \
+    "torch[device-all]==2.14.0+rocm10.1.0" \
+    "torchvision[device-all]==0.29.0a0+rocm10.1.0" \
+    "torchaudio==2.11.0.3+rocm10.1.0"
 pip install -r requirements.txt
 ```
 
-`requirements.txt` pins no versions. The environment this was developed and run in:
-Python 3.14, `flwr` 1.36, `flwr-datasets` 0.6.1, `torch` 2.14, `opacus` 1.6,
-`datasets` 4.8, `numpy` 2.5, `pandas` 3.0. The Flower API used here
+`requirements.txt` pins the top-level libraries to the environment the 10-seed sweep
+runs in: Python 3.12 under WSL2, `flwr` 1.39, `ray` 2.55, `flwr-datasets` 0.6.1,
+`torch` 2.14 (ROCm build), `opacus` 1.6, `datasets` 4.8, `numpy` 2.5, `pandas` 3.0.
+On a CUDA or CPU machine, skip the ROCm step and remove the `+rocm10.1.0` suffix from
+the `torch` and `torchvision` pins in `requirements.txt`. The Flower API used here
 (`flwr.app`, `flwr.clientapp`, `flwr.serverapp.strategy.FedProx`, `Message`-based
 clients) is the modern one and will **not** work on Flower 1.x releases before ~1.13.
-
-`medmnist` is listed in `requirements.txt` but is not imported anywhere in the current
-code — a leftover from an earlier dataset.
 
 Note that `.gitignore` covers only `.venv`, `__pycache__` and `.claude`: both
 `cell_images_32/` (27,558 files) and `results/` are currently untracked but not

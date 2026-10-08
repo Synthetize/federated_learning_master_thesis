@@ -93,7 +93,12 @@ def run_training(alpha: float, seed: int, target_epsilon: float | None,
             server_app=server_app,
             client_app=client_app,
             num_supernodes=cfg.num_clients,
-            backend_config={"client_resources": cfg.client_resources},
+            backend_config={
+                "client_resources": cfg.client_resources,
+                # Ray does not detect AMD GPUs under WSL (no amdsmi/rocm-smi), so the
+                # card must be declared by hand or the actor pool stays empty.
+                "init_args": {"num_gpus": 1 if cfg.client_resources.get("num_gpus") else 0},
+            },
         )
     except Exception as exc:  # noqa: BLE001 - si prosegue con la combinazione successiva
         error = exc

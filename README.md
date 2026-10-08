@@ -42,8 +42,14 @@ federated/               [1] the federated sweep, as a package -> results/malari
   app.py                     Flower ClientApp + per-round centralised evaluation
   sweep.py                   one run, saving, the sweep loop, the CLI
   report.py                  aggregate tables and diagnostic figures
-baselines.py             [2] non-federated baselines -> results/baselines/
-central_seeds.py         [2b] one centralised run per seed (fixes a seed bug)
+baselines/               [2] non-federated baselines -> results/baselines/ (package)
+  config.py                  read from federated.config, nothing copied
+  paths.py                   output names (what dca.py reads)
+  data.py                    loaders, reused from federated.dataset
+  training.py                evaluate, train_best_on_val (early stopping)
+  local.py                   one model per (alpha, seed, client)
+  central.py                 one centralised model per seed
+  summary.py                 tables from local_meta.csv / central_meta.csv
 dca.py                   [3] the analysis: DCA, costs, Safe Range -> results/dca/
 cell_images_32/          the dataset, pre-resized to 32x32
 results/                 every artefact produced by the three stages
@@ -118,7 +124,7 @@ section 2:
 
 Plus, at the top level: `summary_all.csv`, `summary_mean.csv`, `history_all.csv`.
 
-### `baselines.py` — the two non-federated references
+### `baselines/` — the two non-federated references
 
 A plain PyTorch loop: no Flower, no Ray, no Opacus, because neither baseline is
 federated and neither is trained under DP.
@@ -126,58 +132,51 @@ federated and neither is trained under DP.
 - **`Local_k`** — one model per client, trained on that client's partition only. This
   is "what one hospital achieves alone", and the opponent the federation has to beat
   to justify its existence.
-- **`Centralized`** — one model on all clients' data pooled back together. The upper
-  bound the cost decomposition measures against.
+- **`Centralized`** — one model on all clients' data pooled back together, **one per
+  seed**. The upper bound the cost decomposition measures against.
 
-It deliberately reuses the sweep's exact partitioner, seeds, retry logic, 80/20 split,
-architecture and epoch budget (`EPOCHS = NUM_ROUNDS * LOCAL_EPOCHS = 100`, the same
-number of epochs a client consumes inside the federation). If those did not match, the
-baselines would be scored on a different test set and the comparison would be
-meaningless. Baselines use early stopping on a validation split, which the federated
-model does not: they have no DP noise and so no round-to-round instability requiring a
-window average.
+Nothing is copied from the sweep any more: alphas, seeds, learning rate, momentum, epoch
+budget (`EPOCHS = num_rounds * local_epochs = 100`) and batch size are read from
+`federated.config`, and partitions, the 80/20 client split and the test set are built by
+`federated.dataset`. The previous `baselines.py` kept its own copy of all of it with a
+comment saying it "MUST match" the sweep; with a single source it cannot drift. Baselines
+use early stopping on a validation split, which the federated model does not: they have
+no DP noise and so no round-to-round instability requiring a window average.
+
+On the old code the refactor was checked to be bit-identical (same probabilities, same
+test labels for the same seed), so nothing about the baselines' results changed.
+
+**Why one centralised model per seed.** The centralised model is invariant to the
+Dirichlet partition (pooling the clients back together reconstructs the same training
+pool whatever alpha is), but not to the seed, because the seed also fixes the 80/20
+train/test split. Seed 43's test set is a different sample of images, so a model trained
+on seed 42's pool scored against seed 43's labels collapses to chance (0.4964, against
+0.9641 on its own seed). Only the Utility Cost and the Federation Cost touch the
+centralised model; Heterogeneity, Privacy, the Interaction and the entire Safe Zone are
+FL-minus-FL differences taken inside one draw. One run per seed also gives the
+Federation Cost an error bar.
 
 **Writes** into `results/baselines/`:
 
 ```
 alpha_<a>/probs_local_s<seed>_c<client>.npy   P(class 1), float32
-probs_central.npy                             P(class 1) of the centralised model
+probs_central_s<seed>.npy                     P(class 1) of the centralised model
+central_weights_s<seed>.pt                    its weights
 test_labels_s<seed>.npy                       raw 0/1 labels
 local_meta.csv                                n_train, val acc, chosen epoch, test acc, duration
+central_meta.csv                              same, one row per seed
 ```
 
-> **Fixed, 7 October 2026.** `run_central()` used to be commented out while still being
-> called, so `python baselines.py` and `python baselines.py central` died with
-> `NameError: name 'run_central' is not defined`. The dispatch no longer calls it and
-> prints which script to run instead. The block stays commented as a historical
-> reference and should **not** be reactivated: it trained a single centralised model on
-> seed 42, and since the seed also fixes the 80/20 test split, that model cannot be
-> scored on another seed's test set. `central_seeds.py` is the correct route.
+The directory name uses `f"alpha_{alpha:g}"`, the same convention as
+`federated/paths.py` (`alpha_10`, `alpha_1`): the old script wrote `alpha_10.0` while the
+sweep wrote `alpha_10`, two directories that `dca.py` normalises with `float()` and that
+collapsed onto the same key in `_local_files()`, overwriting each other.
 
-> **Also fixed.** `ALPHAS` was `[0.4]` and `SEEDS` was `[42, 43, 44]`; both now cover the
-> full grid (6 alphas x 10 seeds). And `local_dir()` now formats the alpha as
-> `f"alpha_{alpha:g}"`, the same convention as `federated/paths.py`: the sweep used to
-> write `alpha_10` while this script wrote `alpha_10.0`, two directories that `dca.py`
-> normalises with `float()` and that therefore collapsed onto the same key in
-> `_local_files()`, overwriting each other.
-
-### `central_seeds.py` — one centralised run per seed
-
-A fix, and the docstring explains the reasoning. The centralised model is invariant to
-the Dirichlet partition — pooling the clients back together reconstructs the same
-training pool whatever alpha is — which is why it sits outside the alpha loop. But it
-is **not** invariant to the seed, because the seed also fixes the 80/20 train/test
-split. Seed 43's test set is a different sample of images, so a model trained on seed
-42's pool scored against seed 43's labels collapses to chance (0.4964, against 0.9641
-on its own seed).
-
-Only the Utility Cost and the Federation Cost touch the centralised model, so only
-those two were affected; Heterogeneity, Privacy, the Interaction and the entire Safe
-Zone are FL-minus-FL differences taken inside one draw. One run per seed fixes it and
-incidentally gives the Federation Cost an error bar.
-
-Writes `results/baselines/probs_central_s<seed>.npy` and `central_weights_s<seed>.pt`.
-The existing `probs_central.npy` is left untouched and reused as the seed-42 run.
+> **History.** `baselines.py` and `central_seeds.py` (commit `24166df2`) are replaced by
+> this package. The old `run_central()` trained a single centralised model on seed 42 and
+> was commented out while still being called (`NameError`); it is gone, and
+> `python -m baselines central` is the correct route. The old `probs_central.npy`
+> fallback in `dca.py` is still there but no longer produced.
 
 ### `dca.py` — the analysis
 
@@ -247,7 +246,7 @@ The NIH malaria dataset (27,558 images, perfectly balanced: 13,779 `Parasitized`
 access makes the dataset about 9x lighter to read during training. If this folder is
 absent the code falls back to a full-resolution `cell_images/` folder.
 
-> ⚠️ Both the notebook and `baselines.py` mention `python resize_dataset.py` as the way
+> ⚠️ The legacy notebook mentions `python resize_dataset.py` as the way
 > to generate this folder, but **that script is not in the repository**. The folder is
 > already here, so this only matters if you need to rebuild it from the original Kaggle
 > download. Likewise `download_dataset.ipynb`, referenced in an error message, is absent.
@@ -332,22 +331,20 @@ python -m federated.report --plots
 
 ```bash
 source .venv/bin/activate
-python baselines.py local     # 6 clients x 10 seeds x 6 alphas, 100 epochs each
-python central_seeds.py       # one centralised model per seed
+python -m baselines            # local models + one centralised model per seed
+python -m baselines local      # only the 360 local models
+python -m baselines central    # only the 10 centralised models
+python -m baselines summary    # tables from the CSVs, trains nothing
 ```
 
-`python baselines.py` without an argument also works again (it runs the local models and
-then tells you to launch `central_seeds.py`); `local` is just the explicit form. Both
-skip whatever is already on disk. **Do not skip this stage for a new seed**: the seed
-fixes the 80/20 test split, so every seed needs its own references or `dca.py` discards
-it. `central_seeds.py` accepts an explicit seed list:
+Both stages skip whatever is already on disk, so it can be interrupted and relaunched.
+`--alphas` and `--seeds` restrict the run (e.g. `python -m baselines --seeds 43 44`),
+`--epochs` shortens it for a smoke test only (results are then NOT comparable with the
+sweep, and the script says so). **Do not skip this stage for a new seed**: the seed fixes
+the 80/20 test split, so every seed needs its own references or `dca.py` discards it.
 
-```bash
-python central_seeds.py 43 44
-```
-
-Expect hours: 18 local models at 100 epochs each, plus one centralised model per seed
-on the full pooled training set. `local_meta.csv` records the duration of each.
+Expect hours: 360 local models at 100 epochs each, plus 10 centralised models on the full
+pooled training set. `local_meta.csv` and `central_meta.csv` record the duration of each.
 
 ### 3. The analysis
 

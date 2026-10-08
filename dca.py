@@ -408,7 +408,7 @@ def baseline_nb(thresholds=None, base_dir=None):
                   f"trained on seed {legacy_seed}.\n           The Utility Cost and the "
                   "Federation Cost are then differences across test sets for those seeds "
                   "(every other term is\n           a within-seed difference and is "
-                  "unaffected). Run central_seeds.py to remove this.")
+                  "unaffected). Run python -m baselines central to remove this.")
     return local, central
 
 
@@ -574,7 +574,7 @@ def analyze(window=None, reduce="window", thresholds=None, verbose=True):
         missing = ("the test labels" if "beats_trivial" not in A
                    else "the local baselines")
         print(f"\n{missing} are missing: the Safe Zone and the failure point cannot be "
-              "computed.\nRun first:  python baselines.py")
+              "computed.\nRun first:  python -m baselines")
 
     if "safe" not in A:
         return A, None

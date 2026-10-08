@@ -36,8 +36,7 @@ input 32x32. GroupNorm e non BatchNorm perche' Opacus rifiuta BatchNorm.
 | cosa | dove |
 |---|---|
 | sweep federato | `federated/` (package: config, paths, model, dataset, privacy, app, sweep, report) |
-| baseline locali | `baselines.py local` |
-| centralizzato, uno per seme | `central_seeds.py` |
+| baseline locali e centralizzati (uno per seme) | `baselines/` (config, paths, data, training, local, central, summary) |
 | analisi DCA, figure, tabelle LaTeX | `dca.py` |
 | il notebook sostituito, con le diagnostiche citate in tesi | `legacy/` |
 | capitoli LaTeX | altro repo: `master_thesis_overleaf/tesi_unicam_template/chapters/` |
@@ -46,7 +45,7 @@ input 32x32. GroupNorm e non BatchNorm perche' Opacus rifiuta BatchNorm.
 python -m federated.sweep --help
 python -m federated.sweep --preflight-only
 python -m federated.sweep
-python baselines.py local && python central_seeds.py
+python -m baselines
 python -m federated.report --plots
 python dca.py
 ```
@@ -70,11 +69,11 @@ il 7 ottobre e restano nel commit `24166df2`.
    `federated/config.py` con una diagnostica, e sono citati in tesi. Cambiarne uno rende
    le run non confrontabili con nulla di quanto e' scritto.
 2. **Una sola convenzione per i nomi delle cartelle:** `f"alpha_{alpha:g}"`, quindi 10.0 ->
-   `alpha_10` e 1.0 -> `alpha_1`. Vale per `federated/paths.py` e per `local_dir()` in
-   `baselines.py`. Prima convivevano `alpha_10` e `alpha_10.0`, che `dca.py` normalizza
+   `alpha_10` e 1.0 -> `alpha_1`. Vale per `federated/paths.py` e per `baselines/paths.py`
+   (che riusa `alpha_tag`). Prima convivevano `alpha_10` e `alpha_10.0`, che `dca.py` normalizza
    entrambi con `float()` e che quindi collassavano sulla stessa chiave sovrascrivendosi.
 3. **Tre famiglie per ogni seme.** Lo split 80/20 del test set dipende dal seme, quindi
-   ogni seme nuovo vuole lo sweep FL **piu'** `baselines.py` **piu'** `central_seeds.py`.
+   ogni seme nuovo vuole lo sweep FL **piu'** `python -m baselines` (locali e centralizzato).
    Se ne manca una, la DCA scarta quel seme.
 4. **Mai un solo hardware a meta' campione.** Tutti i 10 semi vanno girati sulla stessa
    macchina: mescolare CPU e GPU dentro il campione introdurrebbe una differenza
@@ -85,9 +84,13 @@ il 7 ottobre e restano nel commit `24166df2`.
 
 ## Trappole che hanno gia' morso
 
-- **`run_central()` in `baselines.py` e' codice morto.** Allenava un solo modello
-  centralizzato sul seme 42, ma il test set dipende dal seme. Il blocco e' commentato e il
-  dispatch non lo chiama piu' (prima moriva con `NameError`). Non riattivarlo.
+- **Il centralizzato e' uno per seme, mai uno solo.** Il vecchio `run_central()` allenava
+  un solo modello sul seme 42, ma il test set dipende dal seme: valutato sul seme 43 dava
+  accuracy da caso. Il codice e' stato rimosso (resta nella storia, commit `24166df2`).
+- **I baseline non hanno piu' una copia della configurazione.** `baselines/config.py`
+  legge tutto da `federated.config`, e `baselines/data.py` riusa `federated.dataset`.
+  Non reintrodurre costanti ricopiate a mano: e' il disallineamento che il refactor
+  elimina. Il refactor e' stato verificato bit a bit contro il vecchio `baselines.py`.
 - **Le medie di conteggi non si riportano come conteggi.** Un "3.4 client su 6" era una
   media su 20 soglie x 3 draw. Se un numero e' un conteggio, va riportato intero o come
   frazione dichiarata di confronti.

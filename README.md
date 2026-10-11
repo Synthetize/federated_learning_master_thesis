@@ -113,7 +113,7 @@ section 2:
   with `C=5` reached 0.908. `C` is a sensitivity bound, not a privacy parameter —
   sigma scales with it, so `(epsilon, delta)` stay exactly as declared.
 
-**Writes**, per `(alpha, seed)`, into `results/malaria/alpha_<a>_seed<s>/`:
+**Writes**, per `(alpha, seed)`, into `results/malaria/alpha_<a>/seed<s>/`:
 
 - `probs_eps<e>.f32` — appended float32, **one row per round**, `P(label == 1)` on the
   shared test set. Written round by round, so an interrupted run still leaves usable
@@ -319,7 +319,7 @@ FL_RESULTS_ROOT=/tmp/fl_smoke python -m federated.sweep --alphas 10 --seeds 42 -
 Fixed-partition repeats, once the main sweep is done. They separate the Dirichlet draw's
 variance from DP-SGD's: the same `(alpha, seed, epsilon)` relaunched gives the same
 partition and the same test set with different noise, and the output goes to
-`alpha_<a>_seed<s>_rep<N>/` without touching the main directories.
+`alpha_<a>/seed<s>_rep<N>/` without touching the main directories.
 
 ```bash
 python -m federated.sweep --replicates 4 --alphas 0.3 --seeds 42 --epsilons 0.5 8

@@ -14,10 +14,10 @@ Standalone module: it does not depend on the notebooks. Use it from a notebook o
 or directly:  python dca.py
 
 INPUT FILE FORMAT
-    results/malaria/alpha_<a>_seed<s>/probs_eps<e>.f32
+    results/malaria/alpha_<a>/seed<s>/probs_eps<e>.f32
         appended float32, ONE ROW PER ROUND, holding P(label == 1) on the shared test set.
         An incomplete row (a run interrupted mid-write) is discarded.
-    results/malaria/alpha_<a>_seed<s>/test_labels.npy
+    results/malaria/alpha_<a>/seed<s>/test_labels.npy
         raw 0/1 labels of the test set. They depend on the seed only.
     results/baselines/alpha_<a>/probs_local_s<s>_c<k>.npy   (optional)
     results/baselines/probs_central.npy                (optional)
@@ -220,7 +220,7 @@ def treat_all(y_raw, thresholds=None, positive_label=None):
 
 
 # --------------------------------------------------------------------------- sweep reading
-_DIR_RE = re.compile(r"alpha_([0-9.]+)_seed(\d+)$")
+_DIR_RE = re.compile(r"alpha_([0-9.]+)[/\\]seed(\d+)$")
 
 
 def _read_probs(path, n_test):
@@ -236,14 +236,14 @@ def load_runs(fl_dir=None):
     """Every run found: a list of dicts with alpha, seed, epsilon, labels, probs."""
     fl_dir = FL_DIR if fl_dir is None else fl_dir
     runs = []
-    for d in sorted(glob.glob(os.path.join(fl_dir, "alpha_*_seed*"))):
-        m = _DIR_RE.search(os.path.basename(d))
+    for d in sorted(glob.glob(os.path.join(fl_dir, "alpha_*", "seed*"))):
+        m = _DIR_RE.search(d)
         if not m:
             continue
         alpha, seed = float(m.group(1)), int(m.group(2))
         lab = os.path.join(d, "test_labels.npy")
         if not os.path.exists(lab):
-            print(f"  skipping {os.path.basename(d)}: test_labels.npy is missing")
+            print(f"  skipping {os.path.relpath(d, fl_dir)}: test_labels.npy is missing")
             continue
         y_raw = np.load(lab)
         for f in sorted(glob.glob(os.path.join(d, "probs_eps*.f32"))):

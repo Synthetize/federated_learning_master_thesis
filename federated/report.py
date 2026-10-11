@@ -27,7 +27,7 @@ ACC_COL = f"acc_media_ultimi{SUMMARY_LAST_N}"
 
 def load_history() -> pd.DataFrame:
     frames = []
-    for path in sorted(glob.glob(os.path.join(paths.FL_DIR, "alpha_*_seed*",
+    for path in sorted(glob.glob(os.path.join(paths.FL_DIR, "alpha_*", "seed*",
                                               "training_history.csv"))):
         frames.append(pd.read_csv(path))
     if not frames:
@@ -133,7 +133,7 @@ def main(argv=None) -> int:
     print()
     export(summary_all, summary_mean, history_all)
 
-    n_models = len(glob.glob(os.path.join(paths.FL_DIR, "alpha_*_seed*", "*.pt")))
+    n_models = len(glob.glob(os.path.join(paths.FL_DIR, "alpha_*", "seed*", "*.pt")))
     print(f"\nmodelli salvati su disco: {n_models}")
 
     if args.plots:

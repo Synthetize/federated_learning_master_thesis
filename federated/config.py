@@ -60,6 +60,7 @@ class ExperimentConfig:
     # federated runs coexisted with "alpha_10.0" (float) for the baselines, and since
     # dca.py normalizes both with float() the two folders collapsed onto the same key,
     # overwriting each other.
+    #alphas: list = field(default_factory=lambda: [10.0, 1.0, 0.5, 0.4, 0.3, 0.2])
     alphas: list = field(default_factory=lambda: [10.0, 1.0, 0.5, 0.4, 0.3, 0.2])
     # alpha = 10 and not 100 as the anchor
     #   near-IID: at 10 the mean per-client class purity is 58.1% against the 50% of the
@@ -83,7 +84,8 @@ class ExperimentConfig:
     # bit-reproducible (the Ray actors and the Opacus generator are not reseeded), so the
     # means over seeds must be read as estimates with variance -- which is also what makes
     # the fixed-partition replicates free (see paths.set_replicate).
-    seeds: list = field(default_factory=lambda: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51])
+    #seeds: list = field(default_factory=lambda: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51])
+    seeds: list = field(default_factory=lambda: [43, 44, 45, 46, 47, 48, 49, 50, 51, 52])
 
     # --- Differential Privacy: record-level DP-SGD on the client side (Opacus) ---
     dp_enabled: bool = True
@@ -105,7 +107,7 @@ class ExperimentConfig:
 
     # --- Execution ---
     skip_completed: bool = True        # skip combinations already on disk (resume)
-    max_hours: float = 0.0             # > 0: the sweep stops cleanly after N hours and
+    max_hours: float = 8.0             # > 0: the sweep stops cleanly after N hours and
                                        # resumes on relaunch. The loop is ordered seed ->
                                        # alpha -> epsilon, so it stops leaving whole seeds.
 

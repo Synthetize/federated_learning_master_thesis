@@ -47,7 +47,8 @@ def alpha_tag(alpha: float) -> str:
 
 
 def results_dir(alpha: float, seed: int) -> str:
-    base = os.path.join(FL_DIR, f"{alpha_tag(alpha)}_seed{int(seed)}")
+    """results/malaria/alpha_<a>/seed<s>/, e seed<s>_rep<n>/ per le ripetizioni."""
+    base = os.path.join(FL_DIR, alpha_tag(alpha), f"seed{int(seed)}")
     return base if _REPLICATE == 0 else f"{base}_rep{_REPLICATE}"
 
 

@@ -1,21 +1,22 @@
-"""Percorsi di output dei baseline.
+"""Baselines output paths.
 
-E' esattamente cio' che dca.py legge, quindi nomi e struttura non si cambiano senza cambiare
-anche dca.py (`_local_files`, `baseline_nb`):
+This is exactly what dca.py reads, so names and structure must not change without also
+changing dca.py (`_local_files`, `baseline_nb`):
 
-    results/baselines/alpha_<alpha>/probs_local_s<seed>_c<client>.npy   P(classe 1), float32
-    results/baselines/probs_central_s<seed>.npy                         P(classe 1), float32
-    results/baselines/central_weights_s<seed>.pt                        pesi del centralizzato
-    results/baselines/test_labels_s<seed>.npy                           label grezze 0/1
-    results/baselines/local_meta.csv                                    una riga per modello locale
-    results/baselines/central_meta.csv                                  una riga per seme
+    results/baselines/alpha_<alpha>/probs_local_s<seed>_c<client>.npy   P(class 1), float32
+    results/baselines/probs_central_s<seed>.npy                         P(class 1), float32
+    results/baselines/central_weights_s<seed>.pt                        centralized weights
+    results/baselines/test_labels_s<seed>.npy                           raw 0/1 labels
+    results/baselines/local_meta.csv                                    one row per local model
+    results/baselines/central_meta.csv                                  one row per seed
 
-I locali stanno in una cartella per alpha; centralizzato e label restano in cima perche'
-non dipendono dall'alpha. Le label dipendono solo dal seed (lo split del test set).
+The local models live in one folder per alpha; the centralized model and the labels stay at
+the top level because they do not depend on alpha. The labels depend only on the seed (the
+test-set split).
 
-CONVENZIONE SUI NOMI: f"alpha_{alpha:g}", la stessa di federated/paths.py (10.0 ->
-"alpha_10", 1.0 -> "alpha_1"). Con due convenzioni dca.py vedeva due cartelle per lo stesso
-alpha e le faceva collassare sulla stessa chiave, sovrascrivendole.
+NAMING CONVENTION: f"alpha_{alpha:g}", the same as federated/paths.py (10.0 -> "alpha_10",
+1.0 -> "alpha_1"). With two conventions dca.py saw two folders for the same alpha and
+collapsed them onto the same key, overwriting each other.
 """
 
 from __future__ import annotations
@@ -46,5 +47,5 @@ def central_weights_path(seed: int) -> str:
 
 
 def labels_path(seed: int) -> str:
-    """In cima e non dentro alpha_*: le label del test set dipendono solo dal seed."""
+    """At the top level and not inside alpha_*: the test-set labels depend only on the seed."""
     return os.path.join(OUT_DIR, f"test_labels_s{seed}.npy")

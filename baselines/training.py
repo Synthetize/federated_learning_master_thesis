@@ -1,4 +1,4 @@
-"""Valutazione e training dei baseline: un ciclo PyTorch, SGD semplice, niente DP."""
+"""Baselines evaluation and training: a PyTorch loop, plain SGD, no DP."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .config import DEVICE, LEARNING_RATE, MOMENTUM
 
 @torch.inference_mode()
 def evaluate(net: nn.Module, loader):
-    """Restituisce loss, accuracy, label grezze (int8) e P(classe 1) (float32)."""
+    """Return loss, accuracy, raw labels (int8) and P(class 1) (float32)."""
     net.to(DEVICE).eval()
     criterion = nn.CrossEntropyLoss()
     loss, correct, n_batches = 0.0, 0, 0
@@ -36,14 +36,14 @@ def evaluate(net: nn.Module, loader):
 
 def train_best_on_val(trainloader, valloader, epochs: int, tag: str = "",
                       log_every: int = 25):
-    """Allena e restituisce il modello dell'EPOCA MIGLIORE sulla validation.
+    """Train and return the model of the BEST EPOCH on the validation set.
 
-    E' l'early stopping previsto dalla Methodology per i baseline: non essendo addestrati
-    sotto DP non hanno l'instabilita' round per round del modello federato, e quindi non
-    richiedono la media su finestra. La validation serve solo a scegliere il modello: il
-    Net Benefit riportato si calcola sul test set comune.
+    This is the early stopping the Methodology prescribes for the baselines: not being
+    trained under DP, they lack the round-by-round instability of the federated model, and
+    therefore do not need window averaging. The validation set is only used to pick the
+    model: the reported Net Benefit is computed on the common test set.
 
-    Restituisce (modello, accuracy di validation dell'epoca scelta, epoca scelta 1-based).
+    Returns (model, validation accuracy of the chosen epoch, chosen epoch, 1-based).
     """
     net = Net().to(DEVICE)
     criterion = nn.CrossEntropyLoss().to(DEVICE)

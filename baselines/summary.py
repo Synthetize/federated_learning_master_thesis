@@ -1,4 +1,4 @@
-"""Riepilogo dei baseline, riletto da local_meta.csv e central_meta.csv."""
+"""Baselines summary, read back from local_meta.csv and central_meta.csv."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from . import paths
 def _read(path: str, key: list):
     if not os.path.exists(path):
         return None
-    # una run ripresa puo' aver riscritto la stessa riga: vale l'ultima
+    # a resumed run may have rewritten the same row: the last one wins
     return pd.read_csv(path).drop_duplicates(subset=key, keep="last")
 
 

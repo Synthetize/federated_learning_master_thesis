@@ -1,4 +1,4 @@
-"""CLI dei baseline:  python -m baselines [local|central|all|summary] [opzioni]"""
+"""Baselines CLI:  python -m baselines [local|central|all|summary] [options]"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def main(argv=None) -> int:
                         f"Solo per prove rapide: cambiarle invalida il confronto")
     args = p.parse_args(argv)
 
-    # import tardivi: --help e summary non devono caricare il dataset
+    # late imports: --help and summary must not load the dataset
     from .summary import print_summary
     if args.what == "summary":
         print_summary()

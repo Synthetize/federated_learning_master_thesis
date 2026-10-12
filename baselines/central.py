@@ -1,21 +1,20 @@
-"""Modello centralizzato: UNO PER SEME.
+"""Centralized model: ONE PER SEED.
 
-Perche' per seme e non uno solo. Il modello centralizzato non dipende dalla partizione
-Dirichlet: unendo i dati dei client si ricostruisce lo stesso pool qualunque sia l'alpha, e
-per questo si allena fuori dal ciclo sugli alpha. Dipende invece dal SEED, perche' il seed
-fissa anche lo split 80/20 del test set. Il test set del seed 43 e' un campione di immagini
-diverso da quello del seed 42, e un modello allenato sul pool del seed 42 ci ha gia' visto
-dentro gran parte delle immagini: le probabilita' salvate non corrispondono alle immagini
-giuste e l'accuracy cade a livello del caso (0.4964 contro le label del seed 43, 0.9641
-contro le proprie).
+Why per seed and not a single one. The centralized model does not depend on the Dirichlet
+partition: pooling the clients' data rebuilds the same pool whatever the alpha, which is
+why it is trained outside the loop over alphas. It does depend on the SEED, because the
+seed also fixes the 80/20 split of the test set. The test set of seed 43 is a different
+sample of images from that of seed 42, and a model trained on the seed-42 pool has already
+seen most of those images: the saved probabilities do not match the right images and the
+accuracy drops to chance level (0.4964 against the seed-43 labels, 0.9641 against its own).
 
-Conseguenza per la tesi: Utility Cost e Federation Cost sono gli unici due termini della
-decomposizione che toccano il modello centralizzato. Heterogeneity, Privacy e Interaction
-sono differenze FL-meno-FL dentro uno stesso draw (il termine centralizzato si semplifica
-algebricamente nell'Interaction), e la Safe Zone non lo usa mai. Con un modello per seme il
-Federation Cost e' calcolato dentro lo stesso draw e acquista anche una barra d'errore.
+Consequence for the thesis: Utility Cost and Federation Cost are the only two terms of the
+decomposition that touch the centralized model. Heterogeneity, Privacy and Interaction are
+FL-minus-FL differences within the same draw (the centralized term cancels algebraically
+in the Interaction), and the Safe Zone never uses it. With one model per seed the
+Federation Cost is computed within the same draw and also gets an error bar.
 
-Riprendibile: salta i semi gia' su disco.
+Resumable: skips the seeds already on disk.
 """
 
 from __future__ import annotations
@@ -58,7 +57,7 @@ def run_one(seed: int, epochs: int = EPOCHS) -> None:
 
     os.makedirs(paths.OUT_DIR, exist_ok=True)
     torch.save(net.state_dict(), paths.central_weights_path(seed))
-    np.save(paths.central_path(seed), probs)       # per ultimo: e' il marcatore di "fatto"
+    np.save(paths.central_path(seed), probs)       # written last: it is the "done" marker
     minutes = (time.time() - t0) / 60
     pd.DataFrame([{"seed": seed, "n_train": len(train_loader.dataset),
                    "val_acc": val_acc, "best_epoch": best_epoch, "test_acc": test_acc,

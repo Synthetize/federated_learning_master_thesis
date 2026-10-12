@@ -1,34 +1,34 @@
-"""Configurazione dei baseline.
+"""Baselines configuration.
 
-Tutto viene da `federated.config.CONFIG`, nessun valore e' riscritto qui. Nella versione
-precedente (baselines.py) alpha, seed, learning rate, momentum, epoche e dimensione minima
-della partizione erano ricopiati a mano, con il commento "DEVE combaciare con lo sweep":
-bastava dimenticarne uno per confrontare il modello federato con baseline allenati in
-condizioni diverse, e il failure point sarebbe stato misurato contro un riferimento sbagliato.
-Leggerli dalla stessa fonte rende quel disallineamento impossibile.
+Everything comes from `federated.config.CONFIG`, no value is rewritten here. In the
+previous version (baselines.py) alpha, seed, learning rate, momentum, epochs and minimum
+partition size were copied by hand, with the comment "MUST match the sweep": forgetting
+one was enough to compare the federated model with baselines trained under different
+conditions, and the failure point would have been measured against the wrong reference.
+Reading them from the same source makes that misalignment impossible.
 """
 
 from __future__ import annotations
 
-from federated.config import CONFIG, device, set_seeds   # noqa: F401  (set_seeds riesportata)
+from federated.config import CONFIG, device, set_seeds   # noqa: F401  (set_seeds re-exported)
 
 ALPHAS = list(CONFIG.alphas)
 SEEDS = list(CONFIG.seeds)
 NUM_CLIENTS = CONFIG.num_clients
 
-# Budget di epoche identico a quello che un client consuma dentro la federazione:
-# num_rounds round x local_epochs epoche locali.
+# Epoch budget identical to what a client consumes inside the federation:
+# num_rounds rounds x local_epochs local epochs.
 EPOCHS = CONFIG.num_rounds * CONFIG.local_epochs
 BATCH_SIZE = CONFIG.batch_size
 LEARNING_RATE = CONFIG.learning_rate
-MOMENTUM = CONFIG.momentum       # 0.0: con m=0.9 gli alpha bassi muoiono (vedi federated/config.py)
+MOMENTUM = CONFIG.momentum       # 0.0: with m=0.9 the low alphas die (see federated/config.py)
 
-# Batch size della sola valutazione: non incide sul risultato, solo sulla velocita'.
+# Batch size for evaluation only: it does not affect the result, just the speed.
 EVAL_BATCH_SIZE = 256
 
-# Il modello centralizzato non dipende dall'alpha: unendo le partizioni si ricostruisce lo
-# stesso pool di training. Ma get_fds vuole un alpha per costruire il dataset, e serve il
-# valore piu' mite, che il partitioner accetta al primo tentativo. Il risultato non cambia.
+# The centralized model does not depend on alpha: merging the partitions rebuilds the same
+# training pool. But get_fds needs an alpha to build the dataset, and the mildest value is
+# the one the partitioner accepts at the first attempt. The result does not change.
 CENTRAL_PARTITION_ALPHA = 10.0
 
 DEVICE = device()

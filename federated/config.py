@@ -84,8 +84,8 @@ class ExperimentConfig:
     # bit-reproducible (the Ray actors and the Opacus generator are not reseeded), so the
     # means over seeds must be read as estimates with variance -- which is also what makes
     # the fixed-partition replicates free (see paths.set_replicate).
-    #seeds: list = field(default_factory=lambda: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51])
-    seeds: list = field(default_factory=lambda: [43, 44, 45, 46, 47, 48, 49, 50, 51, 52])
+    #seeds: list = field(default_factory=lambda: [43, 44, 45, 46, 47, 48, 49, 50, 51, 52])
+    seeds: list = field(default_factory=lambda: [49, 50, 51, 52])
 
     # --- Differential Privacy: record-level DP-SGD on the client side (Opacus) ---
     dp_enabled: bool = True

@@ -1,11 +1,11 @@
-"""Modelli locali: Local_k, un modello per (alpha, seed, client).
+"""Local models: Local_k, one model per (alpha, seed, client).
 
-Ogni client allena un modello sui SOLI dati della propria partizione, con lo stesso budget
-di epoche che consuma dentro la federazione, e il modello dell'epoca migliore sulla propria
-validation viene valutato sul test set comune. E' la risposta alla domanda "e' valsa la
-pena federarsi, o bastava che ognuno si allenasse da solo?".
+Each client trains a model on ONLY its own partition's data, with the same epoch budget it
+consumes inside the federation, and the model of the best epoch on its own validation set
+is evaluated on the common test set. It answers the question "was it worth federating, or
+would it have been enough for everyone to train alone?".
 
-Riprendibile: salta i modelli gia' su disco.
+Resumable: skips the models already on disk.
 """
 
 from __future__ import annotations
@@ -32,9 +32,9 @@ def _append_meta(row: dict) -> None:
 
 
 def train_one(alpha, seed, client, test_loader, epochs) -> None:
-    """Allena, valuta e salva un modello locale."""
-    # seme per modello, indipendente dall'ordine in cui si lanciano: riprendere una run
-    # interrotta non cambia l'inizializzazione dei modelli ancora da fare
+    """Train, evaluate and save one local model."""
+    # per-model seed, independent of the launch order: resuming an interrupted run does not
+    # change the initialization of the models still to be trained
     set_seeds(seed * 100 + client)
     train_loader, val_loader = local_loaders(alpha, seed, client)
     classes = class_counts(train_loader)
@@ -49,8 +49,8 @@ def train_one(alpha, seed, client, test_loader, epochs) -> None:
     os.makedirs(paths.local_dir(alpha), exist_ok=True)
     np.save(paths.local_path(alpha, seed, client), probs)
     minutes = (time.time() - t0) / 60
-    # la riga di meta si scrive DOPO il .npy: un'interruzione fra i due lascia un modello
-    # senza riga, mai una riga senza modello
+    # the meta row is written AFTER the .npy: an interruption between the two leaves a model
+    # without a row, never a row without a model
     _append_meta({"alpha": alpha, "seed": seed, "client": client,
                   "n_train": len(train_loader.dataset), "classi": str(classes),
                   "val_acc": val_acc, "best_epoch": best_epoch,

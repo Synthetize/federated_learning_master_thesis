@@ -1,11 +1,11 @@
-"""Loader dei baseline.
+"""Baselines loaders.
 
-Le partizioni, lo split 80/20 train/validation di ogni client e il test set centralizzato
-vengono da `federated.dataset`, cioe' dallo stesso codice che usa lo sweep. Nella versione
-precedente questa parte era una copia (get_fds, decode_to_tensors, DictTensorDataset)
-tenuta allineata a mano: se le due copie divergevano, i baseline venivano valutati su un
-test set diverso da quello del modello federato e il confronto non voleva dire niente.
-Importarla e' l'unico modo di garantire che coincidano.
+The partitions, the 80/20 train/validation split of each client and the centralized test
+set come from `federated.dataset`, i.e. from the same code the sweep uses. In the previous
+version this part was a copy (get_fds, decode_to_tensors, DictTensorDataset) kept aligned
+by hand: if the two copies diverged, the baselines were evaluated on a different test set
+from the federated model's and the comparison meant nothing. Importing it is the only way
+to guarantee they coincide.
 """
 
 from __future__ import annotations
@@ -20,24 +20,24 @@ from .config import BATCH_SIZE, CENTRAL_PARTITION_ALPHA, EVAL_BATCH_SIZE
 
 
 def get_test_loader(alpha: float, seed: int) -> DataLoader:
-    """Test set centralizzato di (alpha, seed): lo stesso del modello federato."""
+    """Centralized test set of (alpha, seed): the same as the federated model's."""
     return load_centralized_testset(alpha, seed, EVAL_BATCH_SIZE)
 
 
 def local_loaders(alpha: float, seed: int, client: int):
-    """(training, validation) di un client: la sua partizione divisa 80/20, come nel client
-    federato. La validation serve solo a scegliere l'epoca migliore."""
+    """(training, validation) of one client: its partition split 80/20, as in the federated
+    client. The validation set is only used to pick the best epoch."""
     return load_client_data(client, BATCH_SIZE, alpha, seed)
 
 
 def central_loaders(seed: int):
-    """(training, validation, test) del modello centralizzato di un seed.
+    """(training, validation, test) of the centralized model of one seed.
 
-    Il pool e' l'unione di tutte le partizioni, cioe' lo split "train" del dataset (il test
-    set e' gia' escluso), diviso 80/20 come per i client. Il test set e' quello del seed:
-    per questo il centralizzato va allenato una volta PER SEED. Un modello allenato sul pool
-    del seed 42 ha visto buona parte del test set del seed 43, e le sue probabilita' salvate
-    non corrispondono alle immagini di quel test set (accuracy a livello del caso).
+    The pool is the union of all the partitions, i.e. the dataset's "train" split (the test
+    set is already excluded), split 80/20 as for the clients. The test set is the seed's
+    own: that is why the centralized model must be trained once PER SEED. A model trained on
+    the seed-42 pool has seen most of the seed-43 test set, and its saved probabilities do
+    not match the images of that test set (chance-level accuracy).
     """
     fds = get_fds(CENTRAL_PARTITION_ALPHA, seed)
     pool = fds.load_split("train")
@@ -50,7 +50,7 @@ def central_loaders(seed: int):
 
 
 def class_counts(loader: DataLoader) -> dict:
-    """{classe: numero di campioni} del dataset di un loader, per il log."""
+    """{class: number of samples} of a loader's dataset, for logging."""
     labels = loader.dataset.labels
     classes, counts = labels.unique(return_counts=True)
     return dict(zip(classes.tolist(), counts.tolist()))

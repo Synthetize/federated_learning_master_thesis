@@ -58,7 +58,7 @@ limitations that the chapter declares and cannot resolve, **without changing the
 framing**: nothing is to be rewritten at the level of methodology or research questions,
 only the numbers.
 
-In progress: sweep with **10 seeds (42-51) x 6 alphas x 6 privacy configurations = 360
+In progress: sweep with **10 seeds (43-52) x 6 alphas x 6 privacy configurations = 360
 runs**, from scratch on a machine with **AMD Radeon RX 9070 XT + Ryzen 7 9700X** (WSL2,
 PyTorch ROCm). The 3-seed CPU results were deleted on October 7 and remain in commit
 `24166df2`. Under WSL Ray does not detect the AMD GPU: `sweep.py` declares it by hand
@@ -114,12 +114,14 @@ with `init_args={"num_gpus": 1}`, otherwise Flower exits with "ActorPool is empt
 
 1. Recalibration script: Platt fitted on the pooled validation set, applied to the test
    probabilities, DCA rerun. **Does not require retraining.**
-2. `dca.py`: from **half-range** to **mean +- 1.96*SE**, and drop the hand-built 0.02
-   readability margin. With 10 seeds they become unnecessary.
+2. ~~`dca.py`: half-range to mean +- 1.96*SE~~ DONE (12 Oct): `_ci95` columns replace
+   `_hr`, the means and the Safe Range are unchanged. Still to do: the "readability
+   margin" paragraph in Chapter 5 (`Results and Discussions.tex`, around line 29), which
+   is written in terms of three seeds and the old half-range.
 3. Early-stopping symmetry: `argmax(val_accuracy)` from the validation stream (column in
    `training_history.csv`), and the corresponding row from the test stream.
 4. Fixed-partition replicates: `python -m federated.sweep --replicates 4 --alphas 0.3
-   --seeds 42 --epsilons 0.5 8`.
+   --seeds 43 --epsilons 0.5 8`.
 5. Rewriting the numbers in Chapter 5.
 
 ## Wider context

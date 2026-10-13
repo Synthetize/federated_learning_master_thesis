@@ -29,9 +29,10 @@ OUTPUT (when run as a script)
     results/dca/costs<w>.csv            the cost decomposition, one file per window
     results/dca/safe_range<w>.tex       table ready to paste into the thesis
     results/dca/costs<w>.tex            cost decomposition, ready to paste
-    results/dca/figures/decision_curve_alpha_<a>.png   one figure per alpha
-    results/dca/figures/safe_range<w>.png
-    results/dca/figures/<cost><w>.png   one heat map per term of the decomposition
+    results/dca/figures/decision_curve_alpha_<a>.png   FIG_DECISION_CURVE_ALPHAS only
+    results/dca/figures/safe_range<w>.png               clinical window only
+    results/dca/figures/<cost><w>.png   FIG_COST_MAPS only, clinical window only
+    (python dca.py --all-figures writes every figure for every window)
 
     <w> is the reading window: empty for the full threshold grid, "_0p01-0p10" and so on
     for each entry of CLINICAL_RANGES.
@@ -98,6 +99,18 @@ BASE_DIR = os.path.join("results", "baselines")  # input: local and centralised 
 OUT_DIR = os.path.join("results", "dca")         # output: everything the analysis produces
 FIG_DIR = os.path.join(OUT_DIR, "figures")
 
+# Which figures are written to disk. The default is what Chapter 5 actually includes; the
+# tables and CSVs are always written for every window, because they cost nothing. Pass
+# --all-figures to python dca.py to get every figure for every window as well.
+#   - decision curves: only these alphas (one near-homogeneous, one intermediate, one
+#     strongly skewed, the three the chapter walks through)
+#   - heat maps of the decomposition: only these terms, and only over the clinical window
+#     (the full-grid version is in the CSV)
+#   - the Safe Range map, over the clinical window; its two component conditions
+#     (beats_trivial, beats_local) are diagnostics and stay out unless asked for
+FIG_DECISION_CURVE_ALPHAS = (10.0, 0.5, 0.2)
+FIG_COST_MAPS = ("utility_cost", "interaction_cost", "collaboration_gain")
+
 # Which class index is the EVENT one decides to act upon.
 # imagefolder assigns indices alphabetically: Parasitized=0, Uninfected=1.
 POSITIVE_LABEL = 0
@@ -140,7 +153,7 @@ COST_STAT = "mean"
 
 # Minimum number of CONSECUTIVE safe thresholds for a configuration to count as having a
 # Safe Range. A "range" that is one isolated threshold is not a range: with a window of 20
-# thresholds and a seed half-range of the order of 0.01 in Net Benefit, a curve that pokes
+# thresholds and a seed-to-seed spread of the order of 0.01 in Net Benefit, a curve that pokes
 # above a reference at a single point and sits below it everywhere else has not shown
 # anything. Without this rule the map reports widths of 0.05 and 0.10 that are smaller than
 # the noise between draws, and orders configurations that are in fact all at zero.
@@ -348,7 +361,7 @@ def baseline_nb(thresholds=None, base_dir=None):
     if rows:
         d = pd.DataFrame(rows)
         # The seed is KEPT here. Averaging it away at this point would hand every draw the
-        # same local baseline, which does two things wrong: it reports a half-range of zero
+        # same local baseline, which does two things wrong: it reports a spread of zero
         # for a quantity that varies by up to 0.08 between draws at low alpha, and it pairs
         # the federated model of one partition against the local models of all of them. The
         # grand mean is unchanged either way -- every (alpha, seed) cell holds all clients --
@@ -584,17 +597,34 @@ def analyze(window=None, reduce="window", thresholds=None, verbose=True):
     return A, rng
 
 
-SPREAD_SUFFIX = "_hr"     # half-range across seeds, appended to the column it belongs to
+SPREAD_SUFFIX = "_ci95"   # 95% CI half-width across seeds, appended to the column it belongs to
+CI_Z = 1.96               # normal quantile for 95%
+
+
+def _ci95_halfwidth(v):
+    """1.96 * SE of the mean across seeds, SE = sample standard deviation / sqrt(n).
+
+    The same statistic as federated/report.py. Unlike the half-range (max - min) / 2 used
+    with three seeds, it shrinks as seeds are added: the range of a sample can only grow with
+    its size, while the uncertainty of its MEAN falls with sqrt(n). With fewer than two
+    values there is no spread to estimate and the result is NaN.
+    """
+    v = v.dropna()
+    n = len(v)
+    if n < 2:
+        return np.nan
+    return CI_Z * v.std(ddof=1) / np.sqrt(n)
 
 
 def _collapse_seeds(S):
-    """Averages the per-seed frame and attaches a half-range for every quantity.
+    """Averages the per-seed frame and attaches a 95% CI half-width for every quantity.
 
-    The half-range is (max - min) / 2 across seeds, which with two seeds is simply how far
-    each one sits from their average. It is reported rather than a standard deviation
-    because with two draws a standard deviation is a half-range wearing a lab coat: it
-    carries no extra information and invites a reader to treat it as a confidence interval,
-    which two runs cannot support.
+    The reported value is the mean over seeds; `<column>_ci95` is 1.96 * SE of that mean
+    (see _ci95_halfwidth), so "mean +- ci95" is a normal-approximation 95% interval for the
+    mean over draws. It rests on the draws being independent, which they are (different
+    seeds give different Dirichlet draws and different test sets), and on a sample of
+    around ten, where the normal quantile is slightly optimistic (the t quantile for nine
+    degrees of freedom is 2.26, not 1.96); it is the same convention as the sweep report.
 
     Returns (averaged frame, number of seeds).
     """
@@ -604,19 +634,20 @@ def _collapse_seeds(S):
     A = g[num].mean()
     n_seeds = int(S["seed"].nunique())
     if n_seeds > 1:
-        hr = g[num].agg(lambda v: (v.max() - v.min()) / 2.0)
-        hr = hr.rename(columns={c: c + SPREAD_SUFFIX for c in num})
-        A = A.merge(hr, on=["alpha", "epsilon", "p_t"])
+        ci = g[num].agg(_ci95_halfwidth)
+        ci = ci.rename(columns={c: c + SPREAD_SUFFIX for c in num})
+        A = A.merge(ci, on=["alpha", "epsilon", "p_t"])
     A["n_seeds"] = n_seeds
     return A, n_seeds
 
 
 def seed_spread(A, cost="privacy_cost", window=None):
-    """Typical disagreement between seeds about one cost, over a window of thresholds.
+    """Typical uncertainty of one cost (95% CI half-width), over a window of thresholds.
 
     Returns (per-cell map, typical value). The typical value is the median across cells,
-    and is the resolution of the grid: two cells that differ by less than about twice it
-    are not telling you they are different, whatever the heat map looks like.
+    and is the resolution of the grid: two cells whose means differ by less than about
+    sqrt(2) times it cannot be told apart at 95% (the difference of two independent means
+    has sqrt(2) times the uncertainty of one), whatever the heat map looks like.
     """
     col = cost + SPREAD_SUFFIX
     if col not in A:
@@ -793,11 +824,12 @@ def print_costs(A, window=None):
     for key in ("privacy_cost", "heterogeneity_cost", "utility_cost"):
         _, typ = seed_spread(A, key, window)
         if np.isfinite(typ):
-            print(f"    {_plain(COST_TITLES.get(key, key)):28s} half-range {typ:.4f}   "
-                  f"differences below ~{2 * typ:.4f} are not readable")
-    print("    The half-range is how far each seed sits from the average of the two. Two\n"
-          "    cells whose values differ by less than roughly twice it are not telling you\n"
-          "    they are different, whatever the colour of the heat map suggests.")
+            print(f"    {_plain(COST_TITLES.get(key, key)):28s} 95% CI +-{typ:.4f}   "
+                  f"differences below ~{np.sqrt(2) * typ:.4f} are not readable")
+    print("    The 95% CI is 1.96 x the standard error of the mean over seeds (the value\n"
+          "    shown is the median across cells). Two cells whose means differ by less than\n"
+          "    roughly 1.4 times it are not telling you they are different, whatever the\n"
+          "    colour of the heat map suggests.")
 
 
 # --------------------------------------------------------------------------- figures
@@ -932,10 +964,12 @@ def plot_decision_curve(A, alpha, path=None, show=True, xmax=None):
         plt.close(fig)
 
 
-def plot_decision_curves(A, outdir=None, show=True, xmax=None):
-    """One figure per alpha. Returns the list of files written."""
+def plot_decision_curves(A, outdir=None, show=True, xmax=None, alphas=None):
+    """One figure per alpha (all of them, or only `alphas`). Returns the files written."""
     written = []
     for a in sorted(A["alpha"].unique(), reverse=True):
+        if alphas is not None and not np.any(np.isclose(a, list(alphas))):
+            continue
         path = None
         if outdir:
             fname = f"decision_curve_alpha_{a:g}".replace(".", "p") + ".png"
@@ -1048,7 +1082,7 @@ def plot_cost_map(A, cost="privacy_cost", path=None, show=True, window=None,
         print(f"{cost} is not available: the decomposition could not be computed.")
         return
     # "note"  one line under the figure: the reader calibrates the whole map once
-    # "cells" the half-range printed in every cell, which is precise and unreadable
+    # "cells" the 95% CI printed in every cell, which is precise and unreadable
     # None    nothing
     hr = (cost_map(A, cost + SPREAD_SUFFIX, window)
           if spread in ("note", "cells") else None)
@@ -1092,8 +1126,8 @@ def plot_cost_map(A, cost="privacy_cost", path=None, show=True, window=None,
             # One line rather than a figure in every cell: the reader needs the scale of
             # the noise once, to calibrate the whole map, not cell by cell.
             fig.text(0.01, -0.02,
-                     f"seed half-range {_sig(typ)}; differences below "
-                     f"{_sig(2 * typ)} are not readable",
+                     f"95% CI over seeds, typically $\\pm${_sig(typ)}; differences "
+                     f"below {_sig(np.sqrt(2) * typ)} are not readable",
                      fontsize=8, color="dimgrey", ha="left")
     fig.colorbar(im, ax=ax, shrink=0.85)
     plt.tight_layout()
@@ -1172,8 +1206,9 @@ def plot_cost_profile(A, cost="heterogeneity_cost_main", path=None, show=True, w
         plt.close(fig)
 
 
-def plot_cost_maps(A, outdir=None, show=True, window=None):
-    """One heat map per term of the decomposition. Returns the list of files written.
+def plot_cost_maps(A, outdir=None, show=True, window=None, costs=None):
+    """One heat map per term of the decomposition (all of them, or only `costs`). Returns
+    the list of files written.
 
     The main effects get no figure. Each is measured with the other axis pinned at its
     reference value, so it is constant along every row or column of the grid and a map of it
@@ -1187,7 +1222,7 @@ def plot_cost_maps(A, outdir=None, show=True, window=None):
     tag = win_tag(window)
     for cost in ("utility_cost", "heterogeneity_cost", "privacy_cost", "interaction_cost",
                  "collaboration_gain", "trivial_margin"):
-        if cost not in A:
+        if cost not in A or (costs is not None and cost not in costs):
             continue
         path = os.path.join(outdir, f"{cost}{tag}.png") if outdir else None
         plot_cost_map(A, cost, path=path, show=show, window=window)
@@ -1199,7 +1234,8 @@ def plot_cost_maps(A, outdir=None, show=True, window=None):
 def cost_table(A, window=None, stat=None):
     """The whole decomposition, one row per configuration, over one reading window.
 
-    `_hr` columns carry the half-range across seeds for the quantity they are named after.
+    `_ci95` columns carry the 95% CI half-width across seeds for the quantity they are
+    named after.
     """
     if "utility_cost" not in A:
         return None
@@ -1302,6 +1338,14 @@ def to_latex(rng, window=None, path=None):
 
 
 if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description="DCA, cost decomposition and Safe Range.")
+    ap.add_argument("--all-figures", action="store_true",
+                    help="write every figure for every window; by default only the ones "
+                         "Chapter 5 uses (see FIG_* at the top of the file)")
+    ALL_FIGS = ap.parse_args().all_figures
+
     # non-interactive backend: from a terminal there is no window to show the figures in
     import matplotlib
     matplotlib.use("Agg")
@@ -1315,7 +1359,8 @@ if __name__ == "__main__":
 
     # One figure per alpha, carrying every clinical window as a shaded band: the curves do
     # not depend on the window, only the interval one reads them over does.
-    plot_decision_curves(A, FIG_DIR, show=False)
+    plot_decision_curves(A, FIG_DIR, show=False,
+                         alphas=None if ALL_FIGS else FIG_DECISION_CURVE_ALPHAS)
 
     # Everything downstream of the curves is produced once per window, because there the
     # window is part of the answer and not just a region of the picture.
@@ -1325,9 +1370,14 @@ if __name__ == "__main__":
 
         # the decomposition needs no local baseline, so it is written even when the Safe
         # Range cannot be computed yet
+        # figures: the full-grid window (None) only with --all-figures; its numbers are in
+        # the CSV either way
+        want_figs = ALL_FIGS or w is not None
         ct = cost_table(A, w)
         if ct is not None:
-            plot_cost_maps(A, FIG_DIR, show=False, window=w)
+            if want_figs:
+                plot_cost_maps(A, FIG_DIR, show=False, window=w,
+                               costs=None if ALL_FIGS else FIG_COST_MAPS)
             ct.to_csv(os.path.join(OUT_DIR, f"costs{tag}.csv"), index=False)
             print(f"saved: {os.path.join(OUT_DIR, f'costs{tag}.csv')}")
             tex_blocks.append((f"cost decomposition, {lab}",
@@ -1335,14 +1385,17 @@ if __name__ == "__main__":
                                               window=w)))
 
         if rng is not None:
-            plot_safe_range_map(rng, w, os.path.join(FIG_DIR, f"safe_range{tag}.png"),
-                                show=False)
-            # the two conditions on their own: which one a configuration failed is part of
-            # the result, not a diagnostic
-            for crit, name in (("width_trivial", "beats_trivial"),
-                               ("width_local", "beats_local")):
-                plot_safe_range_map(rng, w, os.path.join(FIG_DIR, f"{name}{tag}.png"),
-                                    show=False, criterion=crit)
+            if want_figs:
+                plot_safe_range_map(rng, w, os.path.join(FIG_DIR, f"safe_range{tag}.png"),
+                                    show=False)
+            if ALL_FIGS:
+                # the two conditions on their own, as maps: diagnostics, off by default
+                # (the same numbers are in safe_range.csv as width_trivial / width_local)
+                for crit, name in (("width_trivial", "beats_trivial"),
+                                   ("width_local", "beats_local")):
+                    plot_safe_range_map(rng, w,
+                                        os.path.join(FIG_DIR, f"{name}{tag}.png"),
+                                        show=False, criterion=crit)
             tex_blocks.append((f"Safe Range, {lab}",
                                to_latex(rng, w,
                                         os.path.join(OUT_DIR, f"safe_range{tag}.tex"))))

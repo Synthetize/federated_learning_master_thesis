@@ -206,9 +206,8 @@ Key decisions it makes, all of them load-bearing:
   linear difference, so the averages are identical either way — what this buys is a
   meaningful spread: with both cells of a difference taken from the same draw, the
   disagreement left between seeds is about the *cost*, not about how good that draw
-  happened to be. Spread is reported as a half-range (`_hr` suffix), not a standard
-  deviation: with three draws a standard deviation invites being read as a confidence
-  interval it cannot support.
+  happened to be. Spread is reported as the 95% CI half-width of the mean over seeds,
+  1.96·SE (`_ci95` suffix), the same statistic as `federated/report.py`.
 - **`CLINICAL_RANGES = [(0.01, 0.20)]`** — for malaria screening a false negative is
   far more serious than a false positive: at `p_t = 0.20` one FN is worth 4 FP, at
   `p_t = 0.01` it is worth 99. Above 0.20 one would be assuming a false alarm is nearly
@@ -306,14 +305,14 @@ the cheapest way to catch an impossible budget.
 For a smoke test, narrow the grid on the command line — no need to edit the config:
 
 ```bash
-python -m federated.sweep --alphas 10 --seeds 42 --epsilons inf --rounds 10
+python -m federated.sweep --alphas 10 --seeds 43 --epsilons inf --rounds 10
 ```
 
 Set `FL_RESULTS_ROOT` to send a test run somewhere other than `results/`, which holds
 the real results:
 
 ```bash
-FL_RESULTS_ROOT=/tmp/fl_smoke python -m federated.sweep --alphas 10 --seeds 42 --rounds 5
+FL_RESULTS_ROOT=/tmp/fl_smoke python -m federated.sweep --alphas 10 --seeds 43 --rounds 5
 ```
 
 Fixed-partition repeats, once the main sweep is done. They separate the Dirichlet draw's
@@ -322,7 +321,7 @@ partition and the same test set with different noise, and the output goes to
 `alpha_<a>/seed<s>_rep<N>/` without touching the main directories.
 
 ```bash
-python -m federated.sweep --replicates 4 --alphas 0.3 --seeds 42 --epsilons 0.5 8
+python -m federated.sweep --replicates 4 --alphas 0.3 --seeds 43 --epsilons 0.5 8
 ```
 
 Then the summary tables:
@@ -394,7 +393,7 @@ Runs are **not** bit-reproducible, and the thesis declares this among its limita
 the simulated clients, nor Opacus' noise generator. Averages over seeds should be read
 as estimates with variance.
 
-With three draws the only available statistic was the half-range, which is what `dca.py`
-still reports. With ten it becomes mean ± 1.96·SE, the standard quantity — and the
+With three draws the only available statistic was the half-range. With ten, `dca.py`
+reports mean ± 1.96·SE (`_ci95` columns), the standard quantity — and the
 non-reproducibility above is also what makes fixed-partition repeats free: relaunching
 the same cell resamples the DP noise while keeping the partition.
